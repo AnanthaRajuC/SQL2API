@@ -65,8 +65,15 @@ class ResultSetDTO:
             headers={'Content-Disposition': 'attachment;filename=result.xlsx'}
         )
 
-def execute_sql(sql):
+def execute_sql(sql, limit=None, offset=None):
     try:
+        print("SQL Query:", sql)
+        print("Limit:", limit)
+        print("Offset:", offset)
+
+        # Remove any trailing semicolon from the SQL query
+        sql = sql.rstrip(";")
+
         connection = mysql.connector.connect(
             host="localhost",
             user="admin",
@@ -76,6 +83,23 @@ def execute_sql(sql):
 
         if connection.is_connected():
             cursor = connection.cursor(dictionary=True)
+
+            # Check if the SQL query already contains a LIMIT clause
+            if "LIMIT" in sql.upper():
+                # Remove the existing LIMIT clause and append the new LIMIT and OFFSET clauses
+                sql = sql.rsplit("LIMIT", 1)[0].strip()
+
+            # Construct the SQL query with LIMIT and OFFSET clauses
+            if limit is not None:
+                sql += f" LIMIT {limit}"
+                if offset is not None:
+                    sql += f" OFFSET {offset}"
+
+            # Append the semicolon back to the end of the SQL query
+            sql += ";"                    
+
+            print("Final SQL Query:", sql)  
+
             cursor.execute(sql)
             result_set = cursor.fetchall()
             return ResultSetDTO(result_set)
@@ -130,11 +154,18 @@ def save_sql_to_file():
 def execute_sql_endpoint():
     data = request.get_json()
     sql_query = data.get('sql')
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('page_size', 10))
+    offset = (page - 1) * page_size
+
+    print("Page:", page)
+    print("Page Size:", page_size)
+    print("Offset:", offset)
 
     if not sql_query:
         return jsonify({'error': 'SQL query is missing'}), 400
 
-    result_set_dto = execute_sql(sql_query)
+    result_set_dto = execute_sql(sql_query, limit=page_size, offset=offset)
 
     if isinstance(result_set_dto, dict):
         return jsonify(result_set_dto), result_set_dto.get("status", 500)
@@ -161,6 +192,9 @@ def execute_sql_with_parameters_from_file():
     data = request.get_json()
     filename = data.get('filename')
     placeholders = data.get('placeholders', {})  # Placeholder values as a dictionary
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('page_size', 10))
+    offset = (page - 1) * page_size
 
     if not filename:
         return jsonify({'error': 'Filename is missing'}), 400
@@ -185,7 +219,7 @@ def execute_sql_with_parameters_from_file():
     print("\nFormed SQL query with placeholder replacements:")
     print(sql_query)  # Print the formed SQL query
 
-    result_set_dto = execute_sql(sql_query)
+    result_set_dto = execute_sql(sql_query, limit=page_size, offset=offset)
 
     if isinstance(result_set_dto, dict):
         return jsonify(result_set_dto), result_set_dto.get("status", 500)
@@ -211,6 +245,9 @@ def execute_sql_with_parameters_from_file():
 def execute_sql_from_file():
     data = request.get_json()
     filename = data.get('filename')
+    page = int(request.args.get('page', 1))
+    page_size = int(request.args.get('page_size', 10))
+    offset = (page - 1) * page_size
 
     if not filename:
         return jsonify({'error': 'Filename is missing'}), 400
@@ -221,7 +258,7 @@ def execute_sql_from_file():
     with open(filename, 'r') as f:
         sql_query = f.read()
 
-    result_set_dto = execute_sql(sql_query)
+    result_set_dto = execute_sql(sql_query, limit=page_size, offset=offset)
 
     if isinstance(result_set_dto, dict):
         return jsonify(result_set_dto), result_set_dto.get("status", 500)

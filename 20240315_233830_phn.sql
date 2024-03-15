@@ -1,0 +1,1 @@
+SELECT * FROM sakila.actor where actor_id = {};
