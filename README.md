@@ -8,7 +8,18 @@
 
 SQL to API
 
-A Python Flask application that interacts with a MySQL database to execute SQL queries and return the results in various formats such as JSON, CSV, TSV, XML, YAML, or XLSX. 
+A Python Flask application that interacts with database to execute SQL queries and return the results in the following formats
+
+- **JSON**  
+- **CSV**  
+- **TSV**  
+- **XML**  
+- **YAML**  
+- **XLSX**  
+
+| Database | Supported |
+|----------|-----------|
+| MySQL    | ✅        |
 
 Additionally, it provides endpoints for saving SQL queries to files, executing SQL queries from files, and executing SQL queries with parameters from files.
 
