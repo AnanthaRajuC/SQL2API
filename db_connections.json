@@ -1,0 +1,28 @@
+{
+    "connections": {
+        "connection1": {
+            "database": "streaming_etl_db",
+            "host": "localhost",
+            "password": "password",
+            "user": "admin"
+        },
+        "connection2": {
+            "host": "localhost",
+            "user": "user2",
+            "password": "password2",
+            "database": "database2"
+        },
+        "connection222": {
+            "database": "database222",
+            "host": "localhost",
+            "password": "password2",
+            "user": "user2"
+        },
+        "connection333": {
+            "database": "database222",
+            "host": "localhost",
+            "password": "password2",
+            "user": "user2"
+        }
+    }
+}

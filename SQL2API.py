@@ -64,7 +64,7 @@ class ResultSetDTO:
             headers={'Content-Disposition': 'attachment;filename=result.xlsx'}
         )
 
-def execute_sql(sql, limit=None, offset=None):
+def execute_sql(sql, connection_name, limit=None, offset=None):
     try:
         print("SQL Query:", sql)
         print("Limit:", limit)
@@ -73,12 +73,13 @@ def execute_sql(sql, limit=None, offset=None):
         # Remove any trailing semicolon from the SQL query
         sql = sql.rstrip(";")
 
-        connection = mysql.connector.connect(
-            host="localhost",
-            user="admin",
-            password="password",
-            database="streaming_etl_db"
-        )
+        # Load connection details using the provided connection name
+        connection_details = load_connection_details(connection_name)
+        if not connection_details:
+            return {"error": f"Connection '{connection_name}' not found"}
+
+        # Establish connection using retrieved connection details
+        connection = mysql.connector.connect(**connection_details)
 
         if connection.is_connected():
             cursor = connection.cursor(dictionary=True)
@@ -106,7 +107,8 @@ def execute_sql(sql, limit=None, offset=None):
         print("Error while connecting to MySQL", error)
         return {"error": "Error while connecting to MySQL", "status": 500}
     finally:
-        if connection and connection.is_connected():
+        # Ensure cursor and connection are closed even if an exception occurs
+        if 'connection' in locals() and connection.is_connected():
             cursor.close()
             connection.close()
 
@@ -158,6 +160,7 @@ def save_sql_to_file():
 def execute_sql_endpoint():
     data = request.get_json()
     sql_query = data.get('sql')
+    connection_name = data.get('connection_name') 
     page = int(request.args.get('page', 1))
     page_size = int(request.args.get('page_size', 10))
     offset = (page - 1) * page_size
@@ -168,8 +171,11 @@ def execute_sql_endpoint():
 
     if not sql_query:
         return jsonify({'error': 'SQL query is missing'}), 400
+    
+    if not connection_name:
+        return jsonify({'error': 'Connection name is missing'}), 400
 
-    result_set_dto = execute_sql(sql_query, limit=page_size, offset=offset)
+    result_set_dto = execute_sql(sql_query, connection_name, limit=page_size, offset=offset)
 
     if isinstance(result_set_dto, dict):
         return jsonify(result_set_dto), result_set_dto.get("status", 500)
@@ -292,18 +298,69 @@ def list_files():
 
     return jsonify({'files': files_data}), 200
 
+# Function to load connection details from JSON file based on connection name
+def load_connection_details(connection_name):
+    with open('db_connections.json', 'r') as f:
+        connections = json.load(f)
+        return connections.get('connections', {}).get(connection_name)
 
+# Function to save connection details to JSON file
+def save_connection_details(connections):
+    with open('db_connections.json', 'w') as f:
+        json.dump(connections, f, indent=4)
+
+# GET endpoint to retrieve all database connections
+@app.route('/connections', methods=['GET'])
+def get_connections():
+    try:
+        with open('db_connections.json', 'r') as f:
+            connections_data = json.load(f)
+    except FileNotFoundError:
+        connections_data = {"connections": {}}
+
+    return jsonify(connections_data), 200       
+
+# PATCH endpoint to add or edit database connections
+@app.route('/connections', methods=['PATCH'])
+def update_connections():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided for updating connections'}), 400
+
+    connections = data.get('connections')
+    if not connections:
+        return jsonify({'error': 'Connections data is missing'}), 400
+
+    # Load existing connections from JSON file
+    try:
+        with open('db_connections.json', 'r') as f:
+            existing_connections = json.load(f)
+    except FileNotFoundError:
+        existing_connections = {"connections": {}}
+
+    # Update or add new connection details
+    existing_connections['connections'].update(connections)
+
+    # Save updated connection details to JSON file
+    with open('db_connections.json', 'w') as f:
+        json.dump(existing_connections, f, indent=4)
+
+    return jsonify({'message': 'Connections updated successfully'}), 200
 
 @app.route('/execute_sql_from_file', methods=['POST'])
 def execute_sql_from_file():
     data = request.get_json()
     filepath = data.get('filepath')
+    connection_name = data.get('connection_name')
     page = int(request.args.get('page', 1))
     page_size = int(request.args.get('page_size', 10))
     offset = (page - 1) * page_size
 
     if not filepath:
         return jsonify({'error': 'Filename is missing'}), 400
+    
+    if not connection_name:
+        return jsonify({'error': 'Connection name is missing'}), 400
 
     if not os.path.exists(filepath):
         return jsonify({'error': 'File not found'}), 404
@@ -311,7 +368,7 @@ def execute_sql_from_file():
     with open(filepath, 'r') as f:
         sql_query = f.read()
 
-    result_set_dto = execute_sql(sql_query, limit=page_size, offset=offset)
+    result_set_dto = execute_sql(sql_query, connection_name, limit=page_size, offset=offset)
 
     if isinstance(result_set_dto, dict):
         return jsonify(result_set_dto), result_set_dto.get("status", 500)
