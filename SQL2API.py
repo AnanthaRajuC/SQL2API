@@ -127,34 +127,91 @@ def view_file_content():
 
     return jsonify({'content': content}), 200
 
-@app.route('/save_sql_to_file', methods=['POST'])
+@app.route('/save_sql_to_file', methods=['PATCH'])
 def save_sql_to_file():
     data = request.get_json()
-    sql_query = data.get('sql')
+    author = data.get('author')
+    description = data.get('description')
+    sql_query = data.get('sql_query')
     filename = data.get('filename')
+    tags = data.get('tags', [])  # Default to an empty list if tags are not provided
+    query_parameters = data.get('query_parameters', {})  # Default to an empty dictionary if query parameters are not provided
+
+    if not author:
+        return jsonify({'error': 'Author is missing'}), 400
+
+    if not description:
+        return jsonify({'error': 'Description is missing'}), 400
 
     if not sql_query:
         return jsonify({'error': 'SQL query is missing'}), 400
 
     if not filename:
-        # Generate a unique filename using a UUID if the filename is not provided
-        filename = f"{str(uuid.uuid4())}.sql"
+        return jsonify({'error': 'Filename is missing'}), 400
+
+    # Generate UUID
+    query_uuid = str(uuid.uuid4())
 
     # Create the saved_sql folder if it doesn't exist
     folder_path = 'saved_sql'
     if not os.path.exists(folder_path):
-        os.makedirs(folder_path)        
+        os.makedirs(folder_path)
 
-    # Append the current date and time as a prefix to the filename
-    now = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filepath = os.path.join(folder_path, f"{now}_{filename}")
+    # Generate file path
+    filepath = os.path.join(folder_path, f"{filename}.json")
 
-    # Save the SQL query to a file
-    with open(filepath, 'w') as f:
-        f.write(sql_query)
+    # Check if the file already exists
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            existing_data = json.load(f)
+        
+        # Find the latest version
+        latest_version = max([int(version) for version in existing_data.keys() if version.isdigit()], default=0)
+        new_version = latest_version + 1
 
-    # Return a success message with the filename
-    return jsonify({'message': 'SQL query saved successfully', 'filename': f"{now}_{filename}"}), 200
+        # Construct data for the new version
+        new_data = {
+            "uuid": query_uuid,
+            "sql_query": sql_query,
+            "author": author,
+            "description": description,
+            "tags": tags,
+            "query_parameters": query_parameters,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "last_modified_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "active",
+            "version": new_version,
+            "execution_history": []  # Initialize execution history as empty list
+        }
+        
+        # Update existing data with the new version
+        existing_data[str(new_version)] = new_data
+
+        # Save updated data to file
+        with open(filepath, 'w') as f:
+            json.dump(existing_data, f, indent=4)
+    else:
+        # Construct data to be saved in JSON format
+        file_data = {
+            "1": {  # Set version to 1 for new files
+                "uuid": query_uuid,
+                "sql_query": sql_query,
+                "author": author,
+                "description": description,
+                "tags": tags,
+                "query_parameters": query_parameters,
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "last_modified_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "active",
+                "version": 1,
+                "execution_history": []  # Initialize execution history as empty list
+            }
+        }
+        # Save data to file
+        with open(filepath, 'w') as f:
+            json.dump(file_data, f, indent=4)
+
+    return jsonify({'message': 'SQL query saved successfully', 'filename': filename, 'uuid': query_uuid}), 200
 
 @app.route('/execute_sql', methods=['POST'])
 def execute_sql_endpoint():
@@ -265,36 +322,31 @@ def list_files():
     if not os.path.exists(folder_path):
         return jsonify({'error': 'Folder not found'}), 404
 
-    sort_by = request.args.get('sort_by', 'datetime')  # Default sorting by datetime
-    if sort_by.lower() not in ['datetime', 'name']:
-        return jsonify({'error': 'Invalid sort_by parameter. Use "datetime" or "name".'}), 400
-
-    sort_order = request.args.get('sort_order', 'asc')  # Default sorting order is ascending
-    if sort_order.lower() not in ['asc', 'desc']:
-        return jsonify({'error': 'Invalid sort order. Use "asc" or "desc".'}), 400
-
     files_data = []
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
-        if os.path.isfile(file_path):
-            # Extract datetime from the filename using regular expressions
-            match = re.search(r'(\d{8}_\d{6})', filename)  # Assuming filename format is YYYYMMDD_HHMMSS
-            if match:
-                datetime_str = match.group(1)
-                file_datetime = datetime.strptime(datetime_str, "%Y%m%d_%H%M%S")
-            else:
-                file_datetime = None
-
+        if os.path.isfile(file_path) and filename.endswith('.json'):
             with open(file_path, 'r') as f:
-                file_content = f.read()
-
-            files_data.append({'filename': filename, 'content': file_content, 'datetime': file_datetime})
-
-    # Sort files based on the specified criteria and order
-    if sort_by.lower() == 'name':
-        files_data.sort(key=lambda x: x['filename'], reverse=(sort_order.lower() == 'desc'))
-    else:
-        files_data.sort(key=lambda x: x['datetime'], reverse=(sort_order.lower() == 'desc'))
+                file_content = json.load(f)
+            
+            file_info = []
+            for version, version_data in file_content.items():
+                file_info.append({
+                    'version': int(version),
+                    'author': version_data.get('author'),
+                    'description': version_data.get('description'),
+                    'tags': version_data.get('tags', []),
+                    'query_parameters': version_data.get('query_parameters', {}),
+                    'created_at': version_data.get('created_at'),
+                    'last_modified_at': version_data.get('last_modified_at'),
+                    'status': version_data.get('status'),
+                    'execution_history': version_data.get('execution_history', [])
+                })
+                
+            files_data.append({
+                'filename': filename[:-5],  # Remove the .json extension from filename
+                'versions': file_info
+            })
 
     return jsonify({'files': files_data}), 200
 
