@@ -259,36 +259,37 @@ def execute_sql_endpoint():
 @app.route('/execute_sql_with_parameters_from_file', methods=['POST'])
 def execute_sql_with_parameters_from_file():
     data = request.get_json()
-    filename = data.get('filename')
+    filepath = data.get('filepath')
+    connection_name = data.get('connection_name')
     placeholders = data.get('placeholders', {})  # Placeholder values as a dictionary
     page = int(request.args.get('page', 1))
     page_size = int(request.args.get('page_size', 10))
     offset = (page - 1) * page_size
 
-    if not filename:
+    if not filepath:
         return jsonify({'error': 'Filename is missing'}), 400
 
-    if not os.path.exists(filename):
+    if not os.path.exists(filepath):
         return jsonify({'error': 'File not found'}), 404
 
-    with open(filename, 'r') as f:
-        sql_query = f.read()
+    with open(filepath, 'r') as f:
+        file_content = json.load(f)
 
-    # Print placeholder key and value pairs
-    print("Placeholder key-value pairs:")
-    for key, value in placeholders.items():
-        print(f"{key}: {value}")
+    # Find the highest version
+    highest_version = max([int(version) for version in file_content.keys() if version.isdigit()], default=0)
+    if highest_version == 0:
+        return jsonify({'error': 'No valid versions found in the file'}), 400
+
+    # Get the SQL query for the highest version
+    highest_version_data = file_content[str(highest_version)]
+    sql_query = highest_version_data.get('sql_query')
 
     # Replace placeholder text in the SQL query with provided parameter values
     for key, value in placeholders.items():
         placeholder = f"{{{key}}}"
-        print(f"Replacing '{placeholder}' with '{str(value)}'")  # Debug print statement
         sql_query = sql_query.replace(placeholder, str(value))
 
-    print("\nFormed SQL query with placeholder replacements:")
-    print(sql_query)  # Print the formed SQL query
-
-    result_set_dto = execute_sql(sql_query, limit=page_size, offset=offset)
+    result_set_dto = execute_sql(sql_query, connection_name=connection_name, limit=page_size, offset=offset)
 
     if isinstance(result_set_dto, dict):
         return jsonify(result_set_dto), result_set_dto.get("status", 500)
@@ -410,17 +411,23 @@ def execute_sql_from_file():
 
     if not filepath:
         return jsonify({'error': 'Filename is missing'}), 400
-    
-    if not connection_name:
-        return jsonify({'error': 'Connection name is missing'}), 400
 
     if not os.path.exists(filepath):
         return jsonify({'error': 'File not found'}), 404
 
     with open(filepath, 'r') as f:
-        sql_query = f.read()
+        file_content = json.load(f)
+    
+    # Find the highest version
+    highest_version = max([int(version) for version in file_content.keys() if version.isdigit()], default=0)
+    if highest_version == 0:
+        return jsonify({'error': 'No valid versions found in the file'}), 400
 
-    result_set_dto = execute_sql(sql_query, connection_name, limit=page_size, offset=offset)
+    # Get the SQL query for the highest version
+    highest_version_data = file_content[str(highest_version)]
+    sql_query = highest_version_data.get('sql_query')
+
+    result_set_dto = execute_sql(sql_query, connection_name=connection_name, limit=page_size, offset=offset)
 
     if isinstance(result_set_dto, dict):
         return jsonify(result_set_dto), result_set_dto.get("status", 500)

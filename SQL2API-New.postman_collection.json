@@ -1,0 +1,242 @@
+{
+	"info": {
+		"_postman_id": "57a7c123-5a8f-4832-a01b-b3c25665db90",
+		"name": "SQL2API-New",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "19327853"
+	},
+	"item": [
+		{
+			"name": "db connections",
+			"item": [
+				{
+					"name": "List all DB Connections",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://127.0.0.1:5000/connections",
+							"protocol": "http",
+							"host": [
+								"127",
+								"0",
+								"0",
+								"1"
+							],
+							"port": "5000",
+							"path": [
+								"connections"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create/Update DB Connections",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"connections\": {\n        \"connection333\": {\n            \"database\": \"dbrrrr\",\n            \"host\": \"localhosggggggggggggt\",\n            \"password\": \"passwogggggggggrd2\",\n            \"user\": \"user2\"\n        }\n    }\n}"
+						},
+						"url": {
+							"raw": "http://127.0.0.1:5000/connections",
+							"protocol": "http",
+							"host": [
+								"127",
+								"0",
+								"0",
+								"1"
+							],
+							"port": "5000",
+							"path": [
+								"connections"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Saved Queries",
+			"item": [
+				{
+					"name": "Save SQL to File",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n            \"author\": \"anantha\",\n            \"dependencies\": [],\n            \"description\": \"test249\",\n            \"execution_history\": [],\n            \"filename\": \"aaa\",\n            \"query_parameters\": {},\n            \"sql_query\": \"SELECT * FROM sakila.actor where actor_id = {}\",\n            \"status\": \"active\",\n            \"tags\": \"test,prod\",\n            \"version\": 1.1\n        }"
+						},
+						"url": {
+							"raw": "http://localhost:5000/save_sql_to_file",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"save_sql_to_file"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Execute SQL via File",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"filepath\": \"/home/anantha/ARC/experiments/SQL2API/saved_sql/ccc.json\",\n    \"connection_name\": \"connection1\",\n    \"format\": \"xml\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:5000/execute_sql_from_file?page_size=2&page=2&offset=1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"execute_sql_from_file"
+							],
+							"query": [
+								{
+									"key": "page_size",
+									"value": "2"
+								},
+								{
+									"key": "page",
+									"value": "2"
+								},
+								{
+									"key": "offset",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Files",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost:5000/list_files?sort_by=name&sort_order=desc",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"list_files"
+							],
+							"query": [
+								{
+									"key": "sort_by",
+									"value": "name"
+								},
+								{
+									"key": "sort_order",
+									"value": "desc"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Saved Queries with Parameters",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"filepath\": \"/home/anantha/ARC/experiments/SQL2API/saved_sql/aaa.json\",\n    \"connection_name\": \"connection1\",\n    \"placeholders\": {\n        \"actor_id\": 1\n    },\n    \"format\": \"json\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:5000/execute_sql_with_parameters_from_file",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "5000",
+							"path": [
+								"execute_sql_with_parameters_from_file"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Direct SQL Execution via API",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"sql\": \"SELECT * FROM streaming_etl_db.geo;\",\n    \"connection_name\": \"connection1\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:5000/execute_sql?format=xml&page_size=1&page=2",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"execute_sql"
+					],
+					"query": [
+						{
+							"key": "format",
+							"value": "xml"
+						},
+						{
+							"key": "page_size",
+							"value": "1"
+						},
+						{
+							"key": "page",
+							"value": "2"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
