@@ -1,28 +1,39 @@
 {
     "connections": {
-        "connection1": {
+        "localhost-mysql": {
             "database": "streaming_etl_db",
+            "db": "mysql",
             "host": "localhost",
             "password": "password",
             "user": "admin"
         },
-        "connection2": {
+        "localhost-clickhouse": {
+            "database": "sakila",
+            "db": "clickhouse",
             "host": "localhost",
-            "user": "user2",
-            "password": "password2",
-            "database": "database2"
+            "password": "root",
+            "user": "default"
         },
         "connection222": {
             "database": "database222",
             "host": "localhost",
             "password": "password2",
-            "user": "user2"
+            "user": "user2",
+            "db": "mongodb"
         },
         "connection333": {
-            "database": "dbrrrr",
-            "host": "localhosggggggggggggt",
+            "database": "mycollection",
+            "host": "localhost",
             "password": "passwogggggggggrd2",
-            "user": "user2"
+            "user": "user2",
+            "db": "ww"
+        },
+        "localhost-test": {
+            "database": "test1",
+            "db": "test2",
+            "host": "localhost",
+            "password": "1",
+            "user": "default1"
         }
     }
 }

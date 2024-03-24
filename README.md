@@ -6,15 +6,35 @@
 -->
 # SQL2API
 
-SQL to API
-
 A Python Flask application that interacts with database to execute SQL queries and return the results in the following formats
 
-| Database | JSON | CSV | TSV | XML | YAML | XLSX |
-|----------|------|-----|-----|-----|------|------|
-| MySQL    | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
+| Database      | JSON | CSV | TSV | XML | YAML | XLSX |
+|---------------|------|-----|-----|-----|------|------|
+| MySQL         | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
+| ClickHouse    |      | ✅  | ✅  |     |      |      |
 
 Additionally, it provides endpoints for saving SQL queries to files, executing SQL queries from files, and executing SQL queries with parameters from files.
+
+<div align="center">
+
+[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen?logo=github)](CODE_OF_CONDUCT.md) [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Checkout+this+sql+to+api+application&url=https://github.com/AnanthaRajuC/SQL2API&hashtags=Python) [![Twitter Follow](https://img.shields.io/twitter/follow/anantharajuc?label=follow%20me&style=social)](https://twitter.com/anantharajuc)
+</div>
+
+<div align="center">
+  <sub>Built with ❤︎ by <a href="https://twitter.com/anantharajuc">Anantha Raju C</a> and <a href="https://github.com/AnanthaRajuC/SQL2API/graphs/contributors">contributors</a>
+</div>
+
+</br>
+
+<p align="center">
+	<a href="https://github.com/AnanthaRajuC/SQL2API/blob/master/README.md#spring-boot-application-templatestarter-project-"><strong>Explore the docs »</strong></a>
+	<br />
+	<br />
+	<a href="https://github.com/AnanthaRajuC/SQL2API/issues">Report Bug</a>
+	·
+	<a href="https://github.com/AnanthaRajuC/SQL2API/issues">Request Feature</a>
+</p>
+
 
 ## Reporting Issues/Suggest Improvements
 

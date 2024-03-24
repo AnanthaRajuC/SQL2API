@@ -1,0 +1,15 @@
+{
+    "1": {
+        "uuid": "9838b79f-e79f-4e02-9e24-892187e7544b",
+        "sql_query": "SELECT id FROM sakila.film_category;",
+        "author": "anantha",
+        "description": "clickhouse 22 test doc",
+        "tags": "test,prod",
+        "query_parameters": {},
+        "created_at": "2024-03-24 17:07:01",
+        "last_modified_at": "2024-03-24 17:07:01",
+        "status": "active",
+        "version": 1,
+        "execution_history": []
+    }
+}
