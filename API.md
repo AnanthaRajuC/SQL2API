@@ -78,4 +78,24 @@ Save SQL to a file to be called at a later point in time.
 
 ---
 
+### Execute Saved SQL Files
 
+|                                          URL                                 | Method |          Remarks         | Sample Valid Request Body |
+|------------------------------------------------------------------------------|--------|--------------------------|---------------------------|
+|`http://localhost:5000/execute_sql_from_file?page_size=2&page=2&offset=1`     | Post   | Execute saved File.      |  [JSON](#login)           |
+
+~~~json
+{
+    "filepath": "/home/anantha/ARC/experiments/SQL2API/saved_sql/cht.json",
+    "connection_name": "localhost-clickhouse",
+    "format": "tsv"
+}
+~~~
+
+~~~json
+{
+    "filepath": "/home/anantha/ARC/experiments/SQL2API/saved_sql/abc.json",
+    "connection_name": "localhost-mysql",
+    "format": "tsv"
+}
+~~~

@@ -9,6 +9,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, Response, url_for
 from io import BytesIO, StringIO
 from openpyxl import Workbook
+from clickhouse_driver import Client as ClickHouseClient
 
 app = Flask(__name__)
 
@@ -19,22 +20,34 @@ class DateTimeEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 class ResultSetDTO:
-    def __init__(self, result_set):
+    def __init__(self, result_set, column_names=None):
         self.result_set = result_set
+        self.column_names = column_names
+        print("Column names:", self.column_names)
 
     def to_csv(self):
-        csv_data = StringIO()
-        csv_writer = csv.DictWriter(csv_data, fieldnames=self.result_set[0].keys(), delimiter=',')
-        csv_writer.writeheader()
-        csv_writer.writerows(self.result_set)
-        return Response(csv_data.getvalue(), mimetype='text/csv')
+        return self._to_delimited(',', 'text/csv')
 
     def to_tsv(self):
-        tsv_data = StringIO()
-        tsv_writer = csv.DictWriter(tsv_data, fieldnames=self.result_set[0].keys(), delimiter='\t')
-        tsv_writer.writeheader()
-        tsv_writer.writerows(self.result_set)
-        return Response(tsv_data.getvalue(), mimetype='text/tab-separated-values')
+        return self._to_delimited('\t', 'text/tab-separated-values')
+    
+    def _to_delimited(self, delimiter, mimetype):
+        data_io = StringIO()
+        if isinstance(self.result_set[0], dict):
+            if not self.column_names:
+                self.column_names = self.result_set[0].keys()
+            writer = csv.DictWriter(data_io, fieldnames=self.column_names, delimiter=delimiter)
+            writer.writeheader()
+            writer.writerows(self.result_set)
+        elif isinstance(self.result_set[0], tuple):
+            if not self.column_names:
+                self.column_names = [f"column_{i}" for i in range(len(self.result_set[0]))]  # Generate column names
+            writer = csv.writer(data_io, delimiter=delimiter)
+            writer.writerow(self.column_names)  # Write header row
+            writer.writerows(self.result_set)  # Write data rows
+        else:
+            return {"error": "Unsupported result set format"}
+        return Response(data_io.getvalue(), mimetype=mimetype)
 
     def to_xml(self):
         root = ET.Element('data')
@@ -77,17 +90,49 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
         connection_details = load_connection_details(connection_name)
         if not connection_details:
             return {"error": f"Connection '{connection_name}' not found"}
+        
+        print("Connection details:")
+        for key, value in connection_details.items():
+            print(f"{key}: {value}")
 
-        # Establish connection using retrieved connection details
-        connection = mysql.connector.connect(**connection_details)
+        db_type = connection_details.get('db')       
+        if db_type == 'mysql':
+            print("Executing SQL query using MySQL connection...")     
 
-        if connection.is_connected():
-            cursor = connection.cursor(dictionary=True)
+            # Establish connection using retrieved connection details
+            connection = mysql.connector.connect(**connection_details)
 
-            # Check if the SQL query already contains a LIMIT clause
-            if "LIMIT" in sql.upper():
-                # Remove the existing LIMIT clause and append the new LIMIT and OFFSET clauses
-                sql = sql.rsplit("LIMIT", 1)[0].strip()
+            if connection.is_connected():
+                cursor = connection.cursor(dictionary=True)
+
+                # Check if the SQL query already contains a LIMIT clause
+                if "LIMIT" in sql.upper():
+                    # Remove the existing LIMIT clause and append the new LIMIT and OFFSET clauses
+                    sql = sql.rsplit("LIMIT", 1)[0].strip()
+
+                # Construct the SQL query with LIMIT and OFFSET clauses
+                if limit is not None:
+                    sql += f" LIMIT {limit}"
+                    if offset is not None:
+                        sql += f" OFFSET {offset}"
+
+                # Append the semicolon back to the end of the SQL query
+                sql += ";"                    
+
+                print("Final SQL Query:", sql)  
+
+                cursor.execute(sql)
+                result_set = cursor.fetchall()
+                return ResultSetDTO(result_set)
+        elif db_type == 'clickhouse':   
+            print("Executing SQL query using ClickHouse connection...")   
+
+            # Remove 'db' parameter from connection_details for ClickHouse
+            if 'db' in connection_details:
+                del connection_details['db'] 
+
+            # Establish connection using retrieved connection details
+            clickhouse_client = ClickHouseClient(**connection_details)
 
             # Construct the SQL query with LIMIT and OFFSET clauses
             if limit is not None:
@@ -95,21 +140,25 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
                 if offset is not None:
                     sql += f" OFFSET {offset}"
 
-            # Append the semicolon back to the end of the SQL query
-            sql += ";"                    
+            print("Final SQL Query:", sql)
 
-            print("Final SQL Query:", sql)  
+            result_set = clickhouse_client.execute(sql)
+            # Print column names
+            columns = [desc[0] for desc in clickhouse_client.execute(sql, with_column_types=True)[1]]
+            print("Column names:", columns)
+            return ResultSetDTO(result_set,columns)
 
-            cursor.execute(sql)
-            result_set = cursor.fetchall()
-            return ResultSetDTO(result_set)
     except mysql.connector.Error as error:
         print("Error while connecting to MySQL", error)
         return {"error": "Error while connecting to MySQL", "status": 500}
+    except Exception as e:
+        print("Error:", e)
+        return {"error": "An error occurred", "status": 500}
     finally:
         # Ensure cursor and connection are closed even if an exception occurs
-        if 'connection' in locals() and connection.is_connected():
+        if 'cursor' in locals() and cursor is not None:
             cursor.close()
+        if 'connection' in locals() and connection is not None and connection.is_connected():
             connection.close()
 
 @app.route('/view_file_content', methods=['GET'])
