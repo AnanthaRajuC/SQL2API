@@ -35,6 +35,17 @@ Additionally, it provides endpoints for saving SQL queries to files, executing S
 	<a href="https://github.com/AnanthaRajuC/SQL2API/issues">Request Feature</a>
 </p>
 
+<!-- PROJECT SHIELDS -->
+<!--
+*** I'm using markdown "reference style" links for readability.
+*** Reference links are enclosed in brackets [ ] instead of parentheses ( ).
+-->
+
+|     Service     | Badge | Badge | Badge | Badge | Badge |
+|-----------------|-------|-------|-------|-------|-------|
+|  **GitHub**     |[![GitHub last commit](https://img.shields.io/github/last-commit/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/commits/master)|[![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/pulls)|[![GitHub issues](https://img.shields.io/github/issues/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/issues)|[![GitHub forks](https://img.shields.io/github/forks/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/network)|[![GitHub stars](https://img.shields.io/github/stars/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/stargazers)|
+|  **GitHub**     |![GitHub repo size](https://img.shields.io/github/repo-size/AnanthaRajuC/SQL2API)|![GitHub top language](https://img.shields.io/github/languages/top/AnanthaRajuC/SQL2API.svg)|![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/AnanthaRajuC/SQL2API)|![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/AnanthaRajuC/SQL2API.svg)|![GitHub language count](https://img.shields.io/github/languages/count/AnanthaRajuC/SQL2API)|
+
 
 ## Reporting Issues/Suggest Improvements
 
