@@ -14,7 +14,7 @@
     },
     "2": {
         "uuid": "51f79934-1f86-4151-84a8-f571f2b5aaf8",
-        "sql_query": "SELECT id FROM sakila.film_category limit 1;",
+        "sql_query": "SELECT * FROM sakila.film_category;",
         "author": "anantha",
         "description": "clickhouse 22 test doc---------",
         "tags": "test,prod",

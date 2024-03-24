@@ -1,7 +1,7 @@
 {
     "1": {
         "uuid": "518360f8-1bb1-4680-9d2f-8c06296b08fa",
-        "sql_query": "SELECT id FROM sakila.actor limit 1",
+        "sql_query": "SELECT id FROM sakila.actor",
         "author": "anantha",
         "description": "test249",
         "tags": "test,prod",

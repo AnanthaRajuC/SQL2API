@@ -51,26 +51,58 @@ class ResultSetDTO:
 
     def to_xml(self):
         root = ET.Element('data')
-        for row in self.result_set:
-            item = ET.SubElement(root, 'item')
-            for key, value in row.items():
-                sub_element = ET.SubElement(item, key)
-                sub_element.text = str(value)
+
+        if isinstance(self.result_set[0], dict):  # Handle dictionary
+            for row in self.result_set:
+                item = ET.SubElement(root, 'item')
+                for key, value in row.items():
+                    sub_element = ET.SubElement(item, key)
+                    sub_element.text = str(value)
+        elif isinstance(self.result_set[0], tuple):  # Handle tuple
+            column_names = self.column_names if self.column_names else [f"column_{i}" for i in range(len(self.result_set[0]))]
+            for row in self.result_set:
+                item = ET.SubElement(root, 'item')
+                for i, value in enumerate(row):
+                    sub_element = ET.SubElement(item, column_names[i])
+                    sub_element.text = str(value)
+        else:
+            return {"error": "Unsupported result set format"}
+
         xml_data = ET.tostring(root, encoding='unicode', method='xml')
         return Response(xml_data, mimetype='application/xml')
 
     def to_yaml(self):
-        yaml_data = yaml.dump(self.result_set, default_flow_style=False)
+        if isinstance(self.result_set[0], dict):  # Handle dictionary
+            yaml_data = yaml.dump(self.result_set, default_flow_style=False)
+        elif isinstance(self.result_set[0], tuple):  # Handle tuple
+            column_names = self.column_names if self.column_names else [f"column_{i}" for i in range(len(self.result_set[0]))]
+            data = [{column_names[i]: value for i, value in enumerate(row)} for row in self.result_set]
+            yaml_data = yaml.dump(data, default_flow_style=False)
+        else:
+            return {"error": "Unsupported result set format"}
+        
         return Response(yaml_data, mimetype='application/x-yaml')
 
     def to_xlsx(self):
         wb = Workbook()
         ws = wb.active
-        ws.append(list(self.result_set[0].keys()))
-        for row in self.result_set:
-            ws.append(list(row.values()))
+        
+        if isinstance(self.result_set[0], dict):  # Handle dictionary
+            column_names = list(self.result_set[0].keys())
+            ws.append(column_names)
+            for row in self.result_set:
+                ws.append(list(row.values()))
+        elif isinstance(self.result_set[0], tuple):  # Handle tuple
+            column_names = self.column_names if self.column_names else [f"column_{i}" for i in range(len(self.result_set[0]))]
+            ws.append(column_names)
+            for row in self.result_set:
+                ws.append(list(row))
+        else:
+            return {"error": "Unsupported result set format"}
+        
         excel_data = BytesIO()
         wb.save(excel_data)
+        
         return Response(
             excel_data.getvalue(),
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
