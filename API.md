@@ -2,6 +2,20 @@
 
 This application comes with the following out-of-the-box API's.
 
+- **`/view_file_content`**: Retrieves the content of a specified file.  
+
+- **`/save_sql_to_file`**: Saves SQL queries along with metadata to JSON files.  
+
+-  **`/execute_sql`**: Executes SQL queries and returns results in various formats.  
+  
+-  **`/execute_sql_with_parameters_from_file`**: Executes SQL queries from files with placeholder substitution.  
+  
+-  **`/list_files`**: Lists JSON files containing saved SQL queries along with their metadata.  
+  
+-  **`/connections`**: GET retrieves all database connections, and PATCH updates database connections.  
+  
+-  **`/execute_sql_from_file`**: Executes SQL queries from files.  
+
 ### List DB Connections
 
 |                                          URL                       | Method |          Remarks         | Sample Valid Request Body |

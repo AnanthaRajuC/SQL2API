@@ -20,20 +20,6 @@
             "password": "root",
             "user": "postgres",
             "db": "postgres"
-        },
-        "connection333": {
-            "database": "mycollection",
-            "host": "localhost",
-            "password": "passwogggggggggrd2",
-            "user": "user2",
-            "db": "ww"
-        },
-        "localhost-test": {
-            "database": "test1",
-            "db": "test2",
-            "host": "localhost",
-            "password": "1",
-            "user": "default1"
         }
     }
 }

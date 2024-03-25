@@ -6,15 +6,24 @@
 -->
 # SQL2API
 
-A Python Flask application that interacts with database to execute SQL queries and return the results in the following formats
+This project is a Flask-based application designed for executing SQL queries against multiple database types and retrieving the results in various formats.
 
-| Database      | JSON | CSV | TSV | XML | YAML | XLSX |
+|---------------|------|-----|-----|-----|------|------|
+| Database      | JSON | XML | YAML| CSV |  TSV | XLSX |
 |---------------|------|-----|-----|-----|------|------|
 | MySQL         | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 | Postgres      | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 | ClickHouse    | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 
-Additionally, it provides endpoints for saving SQL queries to files, executing SQL queries from files, and executing SQL queries with parameters from files.
+**Executing SQL Queries:** Users can execute SQL queries by sending POST requests to the '/execute_sql' endpoint of the application. They need to provide the SQL query and the connection name as part of the request body.
+
+**Query Parameterization:** The application supports query parameterization by allowing users to specify placeholders in their SQL queries. Placeholder values can be provided as part of the request body when executing the query.
+
+**Saving and Managing Queries:** Users can save SQL queries along with metadata such as author, description, and tags by sending PATCH requests to the '/save_sql_to_file' endpoint. They can also manage saved queries, including editing and deleting them.
+
+**Listing Saved Queries:** Users can list the saved queries stored in the application by sending GET requests to the '/list_files' endpoint. The endpoint returns a list of filenames along with versioning information and metadata for each saved query.
+
+**Connection Management:** Users can manage database connections by sending PATCH requests to the '/connections' endpoint. They can add, edit, or delete connection details, including host, port, username, password, and database name.
 
 <div align="center">
 
