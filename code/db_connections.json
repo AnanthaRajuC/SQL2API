@@ -20,6 +20,13 @@
             "password": "root",
             "user": "postgres",
             "db": "postgres"
+        },
+        "localhost-h2db": {
+            "database": "public",
+            "db": "h2",
+            "host": "localhost",
+            "password": "",
+            "user": "sa"
         }
     }
 }

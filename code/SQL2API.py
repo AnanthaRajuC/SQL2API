@@ -11,6 +11,9 @@ from io import BytesIO, StringIO
 from openpyxl import Workbook
 from clickhouse_driver import Client as ClickHouseClient
 import psycopg2
+import sqlalchemy
+import jaydebeapi
+
 
 app = Flask(__name__)
 
@@ -234,6 +237,45 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
             column_names = [desc[0] for desc in cursor.description]
             return ResultSetDTO(result_set, column_names)
         
+        elif db_type == 'h2':
+            print("Executing SQL query using H2DB connection...")
+
+            # Load the H2 JDBC driver
+            jclassname = "org.h2.Driver"
+            print("111111111111...")
+
+            # Construct the database URL
+            #url = "jdbc:h2:mem:lb"
+            #url = "jdbc:h2:~/TEST_SCHEMA"
+            url="jdbc:h2:tcp://localhost/~/test"
+            print("222...")
+
+            curs = None
+            # Connect to the database
+            conn = jaydebeapi.connect(jclassname, url, ["SA", ""], ["./h2-2.2.224.jar"])
+            print("333...")
+
+            # Execute the SQL query
+            curs = conn.cursor()
+            print("444...")
+            curs.execute(sql)
+            print("555...")
+            result_set = curs.fetchall()
+
+            # Get column names
+            column_names = [desc[0] for desc in curs.description]
+            print("111111111111...")
+
+            return ResultSetDTO(result_set, column_names)
+        else:
+            return {"error": "Unsupported database type"}
+        
+    except jaydebeapi.Error as e:
+        print("JayDeBeApi Error:", e)
+        return {"error": "An error occurred while executing the SQL query", "status": 500}    
+    except sqlalchemy.exc.SQLAlchemyError as e:
+        print("SQLAlchemy Error:", e)
+        return {"error": "An error occurred while executing the SQL query", "status": 500}   
     except psycopg2.Error as error:
         print("Error while connecting to PostgreSQL", error)
         return {"error": "Error while connecting to PostgreSQL", "status": 500}
