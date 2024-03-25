@@ -14,12 +14,12 @@
             "password": "root",
             "user": "default"
         },
-        "connection222": {
-            "database": "database222",
+        "localhost-postgres": {
+            "database": "postgres",
             "host": "localhost",
-            "password": "password2",
-            "user": "user2",
-            "db": "mongodb"
+            "password": "root",
+            "user": "postgres",
+            "db": "postgres"
         },
         "connection333": {
             "database": "mycollection",

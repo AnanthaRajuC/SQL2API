@@ -11,7 +11,8 @@ A Python Flask application that interacts with database to execute SQL queries a
 | Database      | JSON | CSV | TSV | XML | YAML | XLSX |
 |---------------|------|-----|-----|-----|------|------|
 | MySQL         | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
-| ClickHouse    |      | ✅  | ✅  | ✅  | ✅   | ✅   |
+| Postgres      | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
+| ClickHouse    | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 
 Additionally, it provides endpoints for saving SQL queries to files, executing SQL queries from files, and executing SQL queries with parameters from files.
 

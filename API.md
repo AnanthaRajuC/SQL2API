@@ -45,7 +45,19 @@ Execute SQL passed via the endpoint.
 }
 ~~~
 
-**Supported Formats:** *xml, json, csv, tsv, xlsx*
+~~~json
+{
+    "sql": "SELECT * FROM sakila.film_category",
+    "connection_name": "localhost-clickhouse"
+}
+~~~
+
+~~~json
+{
+    "sql": "SELECT * FROM playground",
+    "connection_name": "localhost-postgres"
+}
+~~~
 
 --- 
 

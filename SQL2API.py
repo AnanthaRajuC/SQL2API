@@ -10,6 +10,7 @@ from flask import Flask, request, jsonify, Response, url_for
 from io import BytesIO, StringIO
 from openpyxl import Workbook
 from clickhouse_driver import Client as ClickHouseClient
+import psycopg2
 
 app = Flask(__name__)
 
@@ -23,7 +24,8 @@ class ResultSetDTO:
     def __init__(self, result_set, column_names=None):
         self.result_set = result_set
         self.column_names = column_names
-        print("Column names:", self.column_names)
+        print("Column names -- :", self.column_names)
+        print("Column names -- :", self.result_set)
 
     def to_csv(self):
         return self._to_delimited(',', 'text/csv')
@@ -82,6 +84,20 @@ class ResultSetDTO:
             return {"error": "Unsupported result set format"}
         
         return Response(yaml_data, mimetype='application/x-yaml')
+    
+    def to_json(self):
+        if self.result_set is None:
+            return jsonify({'message': 'No results returned'})
+        elif isinstance(self.result_set[0], dict):
+            return jsonify(self.result_set)
+        elif isinstance(self.result_set[0], tuple):
+            json_data = []
+            for row in self.result_set:
+                row_dict = {self.column_names[i]: value for i, value in enumerate(row)}
+                json_data.append(row_dict)
+            return jsonify(json_data)
+        else:
+            return {"error": "Unsupported result set format"}
 
     def to_xlsx(self):
         wb = Workbook()
@@ -156,6 +172,7 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
                 cursor.execute(sql)
                 result_set = cursor.fetchall()
                 return ResultSetDTO(result_set)
+            
         elif db_type == 'clickhouse':   
             print("Executing SQL query using ClickHouse connection...")   
 
@@ -180,6 +197,46 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
             print("Column names:", columns)
             return ResultSetDTO(result_set,columns)
 
+        elif db_type == 'postgres':   
+            print("Executing SQL query using PostgreSQL connection...")
+
+            # Remove 'db' parameter from connection_details
+            if 'db' in connection_details:
+                del connection_details['db']
+
+            # Establish connection using retrieved connection details
+            connection = psycopg2.connect(**connection_details)
+            if 'connection' in locals() and connection is not None:
+                if connection.status == psycopg2.extensions.STATUS_READY:
+                    print("Connection is ready")
+                else:
+                    print("Connection is not ready")
+            cursor = connection.cursor()
+
+            # Check if the SQL query already contains a LIMIT clause
+            if "LIMIT" in sql.upper():
+                # Remove the existing LIMIT clause and append the new LIMIT and OFFSET clauses
+                sql = sql.rsplit("LIMIT", 1)[0].strip()
+
+            # Construct the SQL query with LIMIT and OFFSET clauses
+            if limit is not None:
+                sql += f" LIMIT {limit}"
+                if offset is not None:
+                    sql += f" OFFSET {offset}"
+
+            # Append the semicolon back to the end of the SQL query
+            sql += ";"                    
+
+            print("Final SQL Query:", sql)  
+
+            cursor.execute(sql)
+            result_set = cursor.fetchall()
+            column_names = [desc[0] for desc in cursor.description]
+            return ResultSetDTO(result_set, column_names)
+        
+    except psycopg2.Error as error:
+        print("Error while connecting to PostgreSQL", error)
+        return {"error": "Error while connecting to PostgreSQL", "status": 500}
     except mysql.connector.Error as error:
         print("Error while connecting to MySQL", error)
         return {"error": "Error while connecting to MySQL", "status": 500}
@@ -190,8 +247,6 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
         # Ensure cursor and connection are closed even if an exception occurs
         if 'cursor' in locals() and cursor is not None:
             cursor.close()
-        if 'connection' in locals() and connection is not None and connection.is_connected():
-            connection.close()
 
 @app.route('/view_file_content', methods=['GET'])
 def view_file_content():
@@ -317,6 +372,9 @@ def execute_sql_endpoint():
 
     if isinstance(result_set_dto, dict):
         return jsonify(result_set_dto), result_set_dto.get("status", 500)
+    
+    if result_set_dto is None:
+        return jsonify({'message': 'No results returned'})
 
     if result_set_dto.result_set:
         output_format = request.args.get('format', 'json')
@@ -330,6 +388,8 @@ def execute_sql_endpoint():
             response = result_set_dto.to_yaml()
         elif output_format == 'xlsx':
             response = result_set_dto.to_xlsx()
+        elif output_format == 'json':
+            response = result_set_dto.to_json()            
         else:
             response = jsonify(result_set_dto.result_set)
 
