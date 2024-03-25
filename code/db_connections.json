@@ -26,7 +26,7 @@
             "db": "h2",
             "host": "localhost",
             "password": "",
-            "user": "sa"
+            "user": "SA"
         }
     }
 }

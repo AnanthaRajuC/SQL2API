@@ -242,29 +242,25 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
 
             # Load the H2 JDBC driver
             jclassname = "org.h2.Driver"
-            print("111111111111...")
 
             # Construct the database URL
             #url = "jdbc:h2:mem:lb"
             #url = "jdbc:h2:~/TEST_SCHEMA"
-            url="jdbc:h2:tcp://localhost/~/test"
-            print("222...")
+            url="jdbc:h2:tcp://"+connection_details.get('host')+"/~/"+connection_details.get('database')
 
             curs = None
-            # Connect to the database
-            conn = jaydebeapi.connect(jclassname, url, ["SA", ""], ["./h2-2.2.224.jar"])
-            print("333...")
 
+            # Connect to the database
+            conn = jaydebeapi.connect(jclassname, url, [connection_details.get('user') , connection_details.get('password')], ["./h2-2.2.224.jar"])
+            
             # Execute the SQL query
             curs = conn.cursor()
-            print("444...")
             curs.execute(sql)
-            print("555...")
             result_set = curs.fetchall()
 
             # Get column names
             column_names = [desc[0] for desc in curs.description]
-            print("111111111111...")
+
 
             return ResultSetDTO(result_set, column_names)
         else:
