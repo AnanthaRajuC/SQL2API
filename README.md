@@ -25,6 +25,8 @@ This project is a Flask-based application designed for executing SQL queries aga
 
 **Connection Management:** Users can manage database connections by sending PATCH requests to the '/connections' endpoint. They can add, edit, or delete connection details, including host, port, username, password, and database name.
 
+---  
+
 <div align="center">
 
 [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen?logo=github)](CODE_OF_CONDUCT.md) [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Checkout+this+sql+to+api+application&url=https://github.com/AnanthaRajuC/SQL2API&hashtags=Python) [![Twitter Follow](https://img.shields.io/twitter/follow/anantharajuc?label=follow%20me&style=social)](https://twitter.com/anantharajuc)
