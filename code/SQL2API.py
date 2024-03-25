@@ -13,7 +13,7 @@ from clickhouse_driver import Client as ClickHouseClient
 import psycopg2
 import sqlalchemy
 import jaydebeapi
-
+import sqlite3
 
 app = Flask(__name__)
 
@@ -199,6 +199,38 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
             columns = [desc[0] for desc in clickhouse_client.execute(sql, with_column_types=True)[1]]
             print("Column names:", columns)
             return ResultSetDTO(result_set,columns)
+        
+        elif db_type == 'sqlite':
+            print("Executing SQL query using SQLite connection...")
+
+            # Load connection details using the provided connection name
+            connection_details = load_connection_details(connection_name)
+            if not connection_details:
+                return {"error": f"Connection '{connection_name}' not found"}
+
+            # Extract database file path from connection details
+            database_path = connection_details.get('database')
+            if not database_path:
+                return {"error": "Database file path not provided"}
+
+            try:
+                # Connect to the SQLite database
+                conn = sqlite3.connect(database_path)
+                cursor = conn.cursor()
+
+                # Execute the SQL query
+                cursor.execute(sql)
+                result_set = cursor.fetchall()
+
+                # Get column names
+                column_names = [desc[0] for desc in cursor.description]
+
+                return ResultSetDTO(result_set, column_names)
+
+            except sqlite3.Error as e:
+                print("SQLite Error:", e)
+                return {"error": "An error occurred while executing the SQL query", "status": 500}
+
 
         elif db_type == 'postgres':   
             print("Executing SQL query using PostgreSQL connection...")
@@ -266,6 +298,9 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
         else:
             return {"error": "Unsupported database type"}
         
+    except sqlite3.Error as e:
+        print("SQLite Error:", e)
+        return {"error": "An error occurred while executing the SQL query", "status": 500}        
     except jaydebeapi.Error as e:
         print("JayDeBeApi Error:", e)
         return {"error": "An error occurred while executing the SQL query", "status": 500}    

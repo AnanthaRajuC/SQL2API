@@ -27,6 +27,10 @@
             "host": "localhost",
             "password": "",
             "user": "SA"
+        },
+        "localhost-sqlite": {
+            "database": "./sqlite-sakila.db",
+            "db": "sqlite"
         }
     }
 }
