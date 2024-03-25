@@ -5,32 +5,37 @@
             "db": "mysql",
             "host": "localhost",
             "password": "password",
-            "user": "admin"
+            "user": "admin",
+            "active": true
         },
         "localhost-clickhouse": {
             "database": "sakila",
             "db": "clickhouse",
             "host": "localhost",
             "password": "root",
-            "user": "default"
+            "user": "default",
+            "active": false
         },
         "localhost-postgres": {
             "database": "postgres",
             "host": "localhost",
             "password": "root",
             "user": "postgres",
-            "db": "postgres"
+            "db": "postgres",
+            "active": true
         },
         "localhost-h2db": {
             "database": "public",
             "db": "h2",
             "host": "localhost",
             "password": "",
-            "user": "SA"
+            "user": "SA",
+            "active": true
         },
         "localhost-sqlite": {
             "database": "./sqlite-sakila.db",
-            "db": "sqlite"
+            "db": "sqlite",
+            "active": false
         }
     }
 }

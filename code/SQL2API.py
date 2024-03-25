@@ -142,6 +142,10 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
         if not connection_details:
             return {"error": f"Connection '{connection_name}' not found"}
         
+        # Check if the connection is active
+        if not connection_details.get("active", False):
+            return {"error": f"The connection '{connection_name}' is currently not active. To use it, it must be set to active."}
+        
         print("Connection details:")
         for key, value in connection_details.items():
             print(f"{key}: {value}")
@@ -182,6 +186,9 @@ def execute_sql(sql, connection_name, limit=None, offset=None):
             # Remove 'db' parameter from connection_details for ClickHouse
             if 'db' in connection_details:
                 del connection_details['db'] 
+
+            if 'active' in connection_details:
+                del connection_details['active'] 
 
             # Establish connection using retrieved connection details
             clickhouse_client = ClickHouseClient(**connection_details)
@@ -569,7 +576,11 @@ def list_files():
 def load_connection_details(connection_name):
     with open('db_connections.json', 'r') as f:
         connections = json.load(f)
-        return connections.get('connections', {}).get(connection_name)
+        connection_data = connections.get('connections', {}).get(connection_name)
+        if connection_data:
+            return connection_data
+        else:
+            return {"error": f"Connection '{connection_name}' not found"}
 
 # Function to save connection details to JSON file
 def save_connection_details(connections):
