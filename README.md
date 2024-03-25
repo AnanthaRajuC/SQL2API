@@ -14,6 +14,7 @@ This project is a Flask-based application designed for executing SQL queries aga
 | MySQL         | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 | Postgres      | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 | ClickHouse    | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
+| H2            | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 
 **Executing SQL Queries:** Users can execute SQL queries by sending POST requests to the '/execute_sql' endpoint of the application. They need to provide the SQL query and the connection name as part of the request body.
 
