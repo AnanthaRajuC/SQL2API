@@ -16,6 +16,19 @@ This application comes with the following out-of-the-box API's.
   
 -  **`/execute_sql_from_file`**: Executes SQL queries from files.  
 
+## Route Endpoint Details
+
+| Endpoint                                | Method | Handler Function                           | File             |
+|-----------------------------------------|--------|---------------------------------------------|------------------|
+| `/execute_sql`                          | POST   | `execute_sql_endpoint()`                    | `code/SQL2API.py`|
+| `/execute_sql_from_file`               | POST   | `execute_sql_from_file()`                  | `code/SQL2API.py`|
+| `/execute_sql_with_parameters_from_file` | POST   | `execute_sql_with_parameters_from_file()`  | `code/SQL2API.py`|
+| `/save_sql_to_file`                    | PATCH  | `save_sql_to_file()`                       | `code/SQL2API.py`|
+| `/list_files`                          | GET    | `list_files()`                             | `code/SQL2API.py`|
+| `/view_file_content`                  | GET    | `view_file_content()`                      | `code/SQL2API.py`|
+| `/connections`                         | GET    | `get_connections()`                        | `code/SQL2API.py`|
+| `/connections`                         | PATCH  | `update_connections()`                     | `code/SQL2API.py`|
+
 ### List DB Connections
 
 |                                          URL                       | Method |          Remarks         | Sample Valid Request Body |

@@ -6,7 +6,7 @@
 -->
 # SQL2API
 
-This project is a Flask-based application designed for executing SQL queries against multiple database types and retrieving the results in various formats.
+SQL2API is a middleware solution that bridges the gap between SQL databases and REST APIs. The system accepts SQL queries through HTTP endpoints and executes them against configured database connections, returning results in multiple formats including JSON, XML, YAML, CSV, TSV, and XLSX.
 
 |---------------|------|-----|-----|-----|------|------|
 | Database      | JSON | XML | YAML| CSV |  TSV | XLSX |

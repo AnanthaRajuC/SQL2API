@@ -9,12 +9,12 @@
             "active": true
         },
         "localhost-clickhouse": {
+            "active": true,
             "database": "sakila",
             "db": "clickhouse",
             "host": "localhost",
             "password": "root",
-            "user": "default",
-            "active": false
+            "user": "default"
         },
         "localhost-postgres": {
             "database": "postgres",
@@ -33,9 +33,12 @@
             "active": true
         },
         "localhost-sqlite": {
-            "database": "./sqlite-sakila.db",
-            "db": "sqlite",
-            "active": false
+            "active": true,
+            "database": "sakila",
+            "db": "clickhouse",
+            "host": "localhost",
+            "password": "root",
+            "user": "default"
         }
     }
 }
