@@ -19,5 +19,7 @@ Security fixes are made against the latest released version.
   has the privileges the API should have. The read-only guard is defence in depth, not a substitute for grants.
 - Keep credentials out of `db_connections.json`: use `"password": "${ENV_VAR}"` references.
 - Do not enable `SQL2API_DEBUG` on a reachable host.
+- Keep the query time limit (`SQL2API_QUERY_TIMEOUT`, 30 seconds by default) and `SQL2API_MAX_PAGE_SIZE` so one
+  expensive request cannot monopolise the service; setting the timeout to `0` removes that protection.
 - Prefer bound `:name` parameters over `{name}` text placeholders.
 - Note that `GET /connections` reveals hosts, ports, users and database names (passwords are masked).

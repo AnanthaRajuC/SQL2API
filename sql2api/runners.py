@@ -3,13 +3,27 @@
 Runners fetch ``limit + 1`` rows: the extra row is how the caller learns whether another page exists.
 Database drivers are imported lazily so only the ones you actually use need to be installed.
 """
+import logging
+import math
 import os
 import sqlite3
+import time
 from pathlib import Path
 
 from . import config
 from .errors import ApiError
 from .sqltools import bind_parameters, is_paginated, paginate
+
+log = logging.getLogger('sql2api')
+
+
+def _timed_out(timeout):
+    return ApiError(f'The query exceeded the time limit of {timeout:g} seconds and was cancelled', 504,
+                    timeout=timeout)
+
+
+def _millis(timeout):
+    return max(1, int(timeout * 1000))
 
 
 def _connect_args(details, **renames):
@@ -45,14 +59,33 @@ def _fetch_page(cursor, sql, params, style, limit, offset):
     return [d[0] for d in cursor.description], rows
 
 
-def _run_mysql(details, sql, params, limit, offset, read_only):
+# MySQL reports 3024 (ER_QUERY_TIMEOUT), MariaDB 1969 (ER_STATEMENT_TIMEOUT)
+_MYSQL_TIMEOUT_ERRNOS = (3024, 1969)
+
+
+def _run_mysql(details, sql, params, limit, offset, read_only, timeout=None):
     import mysql.connector
     conn = mysql.connector.connect(connection_timeout=config.CONNECT_TIMEOUT, **_connect_args(details))
     try:
         cursor = conn.cursor()
         if read_only:
             cursor.execute('SET SESSION TRANSACTION READ ONLY')
-        result = _fetch_page(cursor, sql, params, 'format', limit, offset)
+        if timeout:
+            # MySQL limits SELECT statements in milliseconds; MariaDB uses a differently named variable in seconds.
+            try:
+                cursor.execute(f'SET SESSION max_execution_time = {_millis(timeout)}')
+            except mysql.connector.Error:
+                try:
+                    cursor.execute(f'SET SESSION max_statement_time = {timeout:g}')
+                except mysql.connector.Error:
+                    log.warning('This MySQL server supports neither max_execution_time nor max_statement_time; '
+                                'the query time limit is not enforced')
+        try:
+            result = _fetch_page(cursor, sql, params, 'format', limit, offset)
+        except mysql.connector.Error as error:
+            if getattr(error, 'errno', None) in _MYSQL_TIMEOUT_ERRNOS:
+                raise _timed_out(timeout) from None
+            raise
         if not read_only:
             conn.commit()
         return result
@@ -60,14 +93,20 @@ def _run_mysql(details, sql, params, limit, offset, read_only):
         conn.close()
 
 
-def _run_postgres(details, sql, params, limit, offset, read_only):
+def _run_postgres(details, sql, params, limit, offset, read_only, timeout=None):
     import psycopg2
+    import psycopg2.errors
     conn = psycopg2.connect(connect_timeout=config.CONNECT_TIMEOUT, **_connect_args(details, database='dbname'))
     try:
         if read_only:
             conn.set_session(readonly=True)
         with conn.cursor() as cursor:
-            result = _fetch_page(cursor, sql, params, 'format', limit, offset)
+            if timeout:
+                cursor.execute(f'SET statement_timeout = {_millis(timeout)}')
+            try:
+                result = _fetch_page(cursor, sql, params, 'format', limit, offset)
+            except psycopg2.errors.QueryCanceled:
+                raise _timed_out(timeout) from None
         if not read_only:
             conn.commit()
         return result
@@ -75,13 +114,30 @@ def _run_postgres(details, sql, params, limit, offset, read_only):
         conn.close()
 
 
-def _run_clickhouse(details, sql, params, limit, offset, read_only):
+_CLICKHOUSE_TIMEOUT_EXCEEDED = 159
+
+
+def _run_clickhouse(details, sql, params, limit, offset, read_only, timeout=None):
     from clickhouse_driver import Client
-    client = Client(connect_timeout=config.CONNECT_TIMEOUT, **_connect_args(details))
+    from clickhouse_driver.errors import ServerException
+    client_args = {}
+    if timeout:
+        # Backstop in case the server never answers; the server-side limit below is what normally fires.
+        client_args['send_receive_timeout'] = math.ceil(timeout) + 5
+    client = Client(connect_timeout=config.CONNECT_TIMEOUT, **client_args, **_connect_args(details))
     try:
         sql, args, sliced = _prepare(sql, params, 'pyformat', limit, offset)
-        result = client.execute(sql, args, with_column_types=True,
-                                settings={'readonly': 1} if read_only else None)
+        settings = {}
+        if timeout:
+            settings['max_execution_time'] = math.ceil(timeout)  # whole seconds
+        if read_only:
+            settings['readonly'] = 1  # last: it forbids changing settings after it
+        try:
+            result = client.execute(sql, args, with_column_types=True, settings=settings or None)
+        except ServerException as error:
+            if error.code == _CLICKHOUSE_TIMEOUT_EXCEEDED:
+                raise _timed_out(timeout) from None
+            raise
         # Statements without a result set (DDL, INSERT) may not return a (rows, types) pair.
         rows, column_types = result if isinstance(result, tuple) else ([], [])
         if not sliced:
@@ -91,7 +147,7 @@ def _run_clickhouse(details, sql, params, limit, offset, read_only):
         client.disconnect()
 
 
-def _run_sqlite(details, sql, params, limit, offset, read_only):
+def _run_sqlite(details, sql, params, limit, offset, read_only, timeout=None):
     path = details.get('database')
     if not path:
         raise ApiError('Database file path not provided')
@@ -104,8 +160,24 @@ def _run_sqlite(details, sql, params, limit, offset, read_only):
     else:
         conn = sqlite3.connect(path, timeout=config.CONNECT_TIMEOUT)
     try:
+        expired = []
+        if timeout:
+            deadline = time.monotonic() + timeout
+
+            def check_deadline():
+                if time.monotonic() > deadline:
+                    expired.append(True)
+                    return 1  # non-zero aborts the running statement
+                return 0
+
+            conn.set_progress_handler(check_deadline, 10000)  # called every 10 000 VM instructions
         cursor = conn.cursor()
-        result = _fetch_page(cursor, sql, params, 'qmark', limit, offset)
+        try:
+            result = _fetch_page(cursor, sql, params, 'qmark', limit, offset)
+        except sqlite3.OperationalError:
+            if expired:
+                raise _timed_out(timeout) from None
+            raise
         if not read_only:
             conn.commit()
         return result
@@ -113,7 +185,7 @@ def _run_sqlite(details, sql, params, limit, offset, read_only):
         conn.close()
 
 
-def _run_h2(details, sql, params, limit, offset, read_only):
+def _run_h2(details, sql, params, limit, offset, read_only, timeout=None):
     import jaydebeapi
     host = details.get('host') or 'localhost'
     if details.get('port') and ':' not in host:
@@ -125,7 +197,15 @@ def _run_h2(details, sql, params, limit, offset, read_only):
         # Unlike the other drivers, H2's JDBC setReadOnly() is only a hint and does not block writes,
         # so here the read-only guarantee rests on validate_sql() alone.
         cursor = conn.cursor()
-        result = _fetch_page(cursor, sql, params, 'qmark', limit, offset)
+        if timeout:
+            cursor.execute(f'SET QUERY_TIMEOUT {_millis(timeout)}')
+        try:
+            result = _fetch_page(cursor, sql, params, 'qmark', limit, offset)
+        except jaydebeapi.Error as error:
+            # H2: "Statement was canceled or the session timed out" (error 57014 / 90051)
+            if timeout and any(word in str(error).lower() for word in ('canceled', 'timed out')):
+                raise _timed_out(timeout) from None
+            raise
         if not read_only:
             conn.commit()
         return result

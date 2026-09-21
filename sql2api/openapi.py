@@ -7,12 +7,15 @@ _PAGE_PARAMS = [
     {'name': 'page', 'in': 'query', 'schema': {'type': 'integer', 'minimum': 1, 'default': 1}},
     {'name': 'page_size', 'in': 'query', 'schema': {'type': 'integer', 'minimum': 1, 'default': 10},
      'description': 'Upper limit is SQL2API_MAX_PAGE_SIZE (default 1000).'},
+    {'name': 'timeout', 'in': 'query', 'schema': {'type': 'number', 'exclusiveMinimum': 0},
+     'description': 'Seconds the query may run before it is cancelled (504). Can lower, never raise, the server '
+                    'limit SQL2API_QUERY_TIMEOUT (default 30; 0 disables the server limit).'},
 ]
 _ROWS = {'description': 'The requested page. Header X-Has-More says whether another page follows.',
          'headers': {'X-Page': {'schema': {'type': 'integer'}}, 'X-Page-Size': {'schema': {'type': 'integer'}},
                      'X-Has-More': {'schema': {'type': 'string', 'enum': ['true', 'false']}}},
          'content': {'application/json': {'schema': {'type': 'array', 'items': {'type': 'object'}}}}}
-_ERRORS = {c: {'$ref': '#/components/responses/Error'} for c in ('400', '401', '403', '404', '500')}
+_ERRORS = {c: {'$ref': '#/components/responses/Error'} for c in ('400', '401', '403', '404', '500', '504')}
 
 
 def _body(properties, required):

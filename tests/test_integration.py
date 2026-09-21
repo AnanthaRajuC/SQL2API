@@ -11,6 +11,7 @@ CI provides these as service containers (see .github/workflows/ci.yml).
 import json
 import os
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -34,6 +35,7 @@ INSERT = {
 class IntegrationBase:
     db = None  # set by subclasses
     env_var = None
+    slow_sql = None  # a statement that would run for minutes
 
     @classmethod
     def setUpClass(cls):
@@ -112,6 +114,15 @@ class IntegrationBase:
         self.assertEqual(res.status_code, 403)
         self.assertEqual(len(self.query('SELECT * FROM sql2api_it', '?page_size=100').get_json()), 7)
 
+    def test_query_timeout_cancels_the_statement_and_keeps_the_service_usable(self):
+        started = time.monotonic()
+        res = self.query(self.slow_sql, '?timeout=1')
+        elapsed = time.monotonic() - started
+        self.assertEqual(res.status_code, 504, res.get_data(as_text=True))
+        self.assertLess(elapsed, 10, 'the statement should be cancelled close to the 1 second limit')
+        self.assertIn('time limit', res.get_json()['error'])
+        self.assertEqual(len(self.query('SELECT * FROM sql2api_it', '?page_size=100').get_json()), 7)
+
     def test_saved_query_end_to_end(self):
         self.client.patch('/save_sql_to_file', json={
             'author': 'it', 'description': 'd', 'filename': 'it_query', 'connection_name': 'it',
@@ -132,19 +143,24 @@ class DriverReadOnlyMixin:
 
 class PostgresTests(DriverReadOnlyMixin, IntegrationBase, unittest.TestCase):
     db, env_var = 'postgres', 'SQL2API_IT_POSTGRES'
+    slow_sql = 'SELECT pg_sleep(60)'
 
 
 class MySQLTests(DriverReadOnlyMixin, IntegrationBase, unittest.TestCase):
     db, env_var = 'mysql', 'SQL2API_IT_MYSQL'
+    # (SLEEP() and BENCHMARK() are cut short by MySQL's limit but return normally instead of raising an error)
+    slow_sql = 'SELECT COUNT(*) FROM ' + ', '.join(f'information_schema.columns c{i}' for i in range(4))
 
 
 class ClickHouseTests(DriverReadOnlyMixin, IntegrationBase, unittest.TestCase):
     db, env_var = 'clickhouse', 'SQL2API_IT_CLICKHOUSE'
+    slow_sql = 'SELECT count() FROM numbers(100000000000)'
 
 
 class H2Tests(IntegrationBase, unittest.TestCase):
     # H2's JDBC read-only flag is only a hint, so it relies on the SQL guard (covered by test_writes_are_blocked).
     db, env_var = 'h2', 'SQL2API_IT_H2'
+    slow_sql = 'SELECT COUNT(*) FROM SYSTEM_RANGE(1, 100000) a, SYSTEM_RANGE(1, 100000) b WHERE (a.x * b.x) % 7 = 3'
 
 
 if __name__ == '__main__':

@@ -56,8 +56,8 @@ db_connections.json && sql2api serve`.
 ## Configuration
 
 Behaviour is controlled by environment variables - see the table in the [README](../README.md#configuration)
-(`SQL2API_HOME`, `SQL2API_ALLOW_WRITES`, `SQL2API_API_KEY`, `SQL2API_MAX_PAGE_SIZE`, `SQL2API_HOST`, `SQL2API_PORT`,
-`SQL2API_DEBUG`, `SQL2API_H2_JAR`).
+(`SQL2API_HOME`, `SQL2API_ALLOW_WRITES`, `SQL2API_API_KEY`, `SQL2API_MAX_PAGE_SIZE`, `SQL2API_QUERY_TIMEOUT`,
+`SQL2API_HOST`, `SQL2API_PORT`, `SQL2API_DEBUG`, `SQL2API_H2_JAR`).
 
 ## Running in production
 

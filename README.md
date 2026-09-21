@@ -34,6 +34,8 @@ film_id,title,rating,length
 - **Bound parameters** - write `WHERE id = :id` and the value is sent to the database separately from the SQL, so it
   cannot inject anything. Declare types (`{"id": "int"}`) and query-string values are converted for you.
 - **Pagination** - `?page=2&page_size=50`, with `X-Has-More` telling you whether another page exists.
+- **Query time limit** - runaway queries are cancelled on the database (30 s by default, `?timeout=` per request) so
+  they cannot tie up the service.
 - **Read-only by default** - only single `SELECT`/`WITH`/`SHOW`/`DESCRIBE`/`EXPLAIN` statements run, and sessions are
   opened read-only where the database supports it.
 - **Secrets stay out of files** - `"password": "${PG_PASSWORD}"` in `db_connections.json` reads the environment.
@@ -95,6 +97,7 @@ Everything is configured through environment variables (all optional):
 | `SQL2API_ALLOW_WRITES` | off | Allow `INSERT`/`UPDATE`/DDL. Otherwise only single read-only statements are accepted. |
 | `SQL2API_API_KEY` | unset | When set, every request (except `/health` and `/docs`) needs a matching `X-API-Key` header. |
 | `SQL2API_MAX_PAGE_SIZE` | `1000` | Upper limit for `page_size`. |
+| `SQL2API_QUERY_TIMEOUT` | `30` | Seconds a query may run before it is cancelled (HTTP 504). `0` disables the limit. A request can lower it with `?timeout=`, never raise it. |
 | `SQL2API_HOST` / `SQL2API_PORT` | `127.0.0.1` / `5000` | Bind address for `sql2api serve`. |
 | `SQL2API_DEBUG` | off | Flask debug mode. Never enable on a reachable host. |
 | `SQL2API_H2_JAR` | bundled | Path to a different H2 JDBC jar. |

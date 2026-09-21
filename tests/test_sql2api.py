@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -311,6 +312,78 @@ class DriverWiringTests(unittest.TestCase):
                              ([], []))
 
 
+    def test_postgres_sets_statement_timeout_and_maps_cancellation(self):
+        import psycopg2.errors
+        cursor = mock.MagicMock()
+        cursor.description = [('id',)]
+        cursor.execute.side_effect = [None, psycopg2.errors.QueryCanceled('canceled')]
+        conn = mock.MagicMock()
+        conn.cursor.return_value.__enter__.return_value = cursor
+        with mock.patch('psycopg2.connect', return_value=conn):
+            with self.assertRaises(ApiError) as caught:
+                runners._run_postgres({'host': 'h'}, 'SELECT pg_sleep(9)', None, 5, 0, True, 1.5)
+        self.assertEqual(cursor.execute.call_args_list[0].args, ('SET statement_timeout = 1500',))
+        self.assertEqual(caught.exception.status, 504)
+        conn.close.assert_called_once()
+
+    def test_clickhouse_timeout_setting_precedes_readonly_and_maps_error(self):
+        from clickhouse_driver.errors import ServerException
+        client = mock.MagicMock()
+        client.execute.side_effect = ServerException('Timeout exceeded', 159, None)
+        with mock.patch('clickhouse_driver.Client', return_value=client) as ctor:
+            with self.assertRaises(ApiError) as caught:
+                runners._run_clickhouse({'host': 'h'}, 'SELECT 1', None, 5, 0, True, 1.2)
+        settings = client.execute.call_args.kwargs['settings']
+        self.assertEqual(list(settings.items()), [('max_execution_time', 2), ('readonly', 1)])
+        self.assertEqual(ctor.call_args.kwargs['send_receive_timeout'], 7)
+        self.assertEqual(caught.exception.status, 504)
+        client.disconnect.assert_called_once()
+
+    def test_clickhouse_other_server_errors_are_not_reported_as_timeouts(self):
+        from clickhouse_driver.errors import ServerException
+        client = mock.MagicMock()
+        client.execute.side_effect = ServerException('Unknown table', 60, None)
+        with mock.patch('clickhouse_driver.Client', return_value=client):
+            with self.assertRaises(ServerException):
+                runners._run_clickhouse({'host': 'h'}, 'SELECT 1', None, 5, 0, True, 1)
+
+    def test_mysql_limit_variable_fallback_and_error_mapping(self):
+        import mysql.connector
+        cursor = mock.MagicMock()
+        cursor.description = [('a',)]
+        timeout_error = mysql.connector.Error('Query execution was interrupted', errno=3024)
+
+        def execute(sql, *args):
+            if sql.startswith('SET SESSION max_execution_time'):
+                raise mysql.connector.Error('Unknown system variable', errno=1193)  # e.g. MariaDB
+            if sql.startswith('SELECT'):
+                raise timeout_error
+
+        cursor.execute.side_effect = execute
+        conn = mock.MagicMock()
+        conn.cursor.return_value = cursor
+        with mock.patch('mysql.connector.connect', return_value=conn):
+            with self.assertRaises(ApiError) as caught:
+                runners._run_mysql({'host': 'h'}, 'SELECT SLEEP(9)', None, 5, 0, True, 2)
+        statements = [c.args[0] for c in cursor.execute.call_args_list]
+        self.assertIn('SET SESSION max_statement_time = 2', statements)  # MariaDB variable, in seconds
+        self.assertEqual(caught.exception.status, 504)
+        conn.close.assert_called_once()
+
+    def test_h2_sets_query_timeout_and_maps_cancellation(self):
+        import jaydebeapi
+        cursor = mock.MagicMock()
+        cursor.description = [('C',)]
+        cursor.execute.side_effect = [None, jaydebeapi.DatabaseError('Statement was canceled or the session timed out')]
+        conn = mock.MagicMock()
+        conn.cursor.return_value = cursor
+        with mock.patch('jaydebeapi.connect', return_value=conn):
+            with self.assertRaises(ApiError) as caught:
+                runners._run_h2({'host': 'h', 'database': 'd'}, 'SELECT 1', None, 5, 0, True, 0.5)
+        self.assertEqual(cursor.execute.call_args_list[0].args, ('SET QUERY_TIMEOUT 500',))
+        self.assertEqual(caught.exception.status, 504)
+
+
 class ParameterTests(ApiTestCase):
     def test_bound_parameters_accept_any_text_safely(self):
         nasty = "x'; DROP TABLE actor; --"
@@ -344,6 +417,75 @@ class ParameterTests(ApiTestCase):
                          {'id': 3, 'ratio': 0.5, 'on': True, 'name': '007', 'other': '9'})
         with self.assertRaises(ApiError):
             sqltools.coerce_params(declared, {'id': 'abc'})
+
+
+FOREVER = 'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c'
+
+
+class TimeoutTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        os.environ.pop('SQL2API_QUERY_TIMEOUT', None)
+
+    def test_effective_timeout_rules(self):
+        with mock.patch.dict(os.environ, {'SQL2API_QUERY_TIMEOUT': '10'}):
+            self.assertEqual(config.effective_timeout(None), 10)
+            self.assertEqual(config.effective_timeout(3), 3)      # a request may ask for less...
+            self.assertEqual(config.effective_timeout(99), 10)    # ...but never more
+        with mock.patch.dict(os.environ, {'SQL2API_QUERY_TIMEOUT': '0'}):
+            self.assertIsNone(config.effective_timeout(None))     # 0 disables the server limit
+            self.assertEqual(config.effective_timeout(99), 99)    # a request can still set its own
+        for junk in ('abc', '-5', ''):
+            with mock.patch.dict(os.environ, {'SQL2API_QUERY_TIMEOUT': junk}):
+                self.assertEqual(config.effective_timeout(None), config.DEFAULT_QUERY_TIMEOUT, junk)
+        self.assertEqual(config.effective_timeout(None), config.DEFAULT_QUERY_TIMEOUT)
+
+    def test_timeout_parameter_validation(self):
+        for bad in ('abc', '0', '-1', 'nan', 'inf'):
+            self.assertEqual(self.run_sql('SELECT 1', f'?timeout={bad}').status_code, 400, bad)
+        self.assertEqual(self.run_sql('SELECT 1', '?timeout=5').status_code, 200)
+        self.assertEqual(self.run_sql('SELECT 1', timeout=5).status_code, 200)  # also accepted in the body
+
+    def test_runaway_query_is_cancelled_with_504(self):
+        started = time.monotonic()
+        res = self.run_sql(FOREVER, '?timeout=0.5')
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(res.status_code, 504)
+        self.assertIn('time limit', res.get_json()['error'])
+        self.assertEqual(res.get_json()['timeout'], 0.5)
+        self.assertEqual(self.run_sql('SELECT 1 AS one').get_json(), [{'one': 1}])  # service still healthy
+
+    def test_request_cannot_raise_the_server_limit(self):
+        os.environ['SQL2API_QUERY_TIMEOUT'] = '0.5'
+        started = time.monotonic()
+        res = self.run_sql(FOREVER, '?timeout=1000')
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(res.status_code, 504)
+
+    def test_server_default_applies_without_a_request_timeout(self):
+        os.environ['SQL2API_QUERY_TIMEOUT'] = '0.5'
+        self.assertEqual(self.run_sql(FOREVER).status_code, 504)
+
+    def test_fast_queries_are_unaffected(self):
+        res = self.run_sql('SELECT * FROM actor ORDER BY actor_id', '?timeout=5&page_size=3')
+        self.assertEqual(len(res.get_json()), 3)
+
+    def test_saved_query_timeout_is_recorded_in_history(self):
+        self.save('slow', sql=FOREVER, connection_name='lite')
+        self.assertEqual(self.client.get('/q/slow?timeout=0.5').status_code, 504)
+        with open(os.path.join(self.saved_dir, 'slow.json')) as f:
+            entry = json.load(f)['1']['execution_history'][0]
+        self.assertEqual(entry['status'], 'error')
+        self.assertIn('time limit', entry['error'])
+
+    def test_timeout_is_not_treated_as_a_query_parameter(self):
+        self.save('t', sql='SELECT :id AS id', connection_name='lite')
+        self.assertEqual(self.client.get('/q/t?id=4&timeout=5').get_json(), [{'id': '4'}])
+
+    def test_openapi_documents_the_timeout_parameter(self):
+        spec = self.client.get('/openapi.json').get_json()
+        names = [p['name'] for p in spec['paths']['/execute_sql']['post']['parameters']]
+        self.assertIn('timeout', names)
 
 
 class ValueCoercionTests(unittest.TestCase):

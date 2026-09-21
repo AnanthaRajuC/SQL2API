@@ -34,6 +34,19 @@ The file is re-read on every request, so edits take effect without a restart, an
 | `sqlite` | `sqlite3` | Opened with `mode=ro` unless writes are enabled |
 | `h2` | `JayDeBeApi` + bundled JDBC jar | Connects to a running H2 TCP server: `jdbc:h2:tcp://<host>[:port]/~/<database>` |
 
+## Query time limit
+
+`SQL2API_QUERY_TIMEOUT` (default 30 seconds) is enforced by each database itself, so the statement is genuinely
+cancelled and its resources released rather than merely abandoned:
+
+| `db` | Mechanism | Notes |
+|------|-----------|-------|
+| `mysql` | `max_execution_time` (MariaDB: `max_statement_time`) | Applies to `SELECT`. MySQL cuts `SLEEP()` and `BENCHMARK()` short but returns normally instead of raising an error. |
+| `postgres` | `statement_timeout` | |
+| `clickhouse` | `max_execution_time` | Whole seconds, checked as data blocks are processed, so cancellation can lag slightly. |
+| `sqlite` | progress handler | Checked every 10 000 VM instructions. |
+| `h2` | `SET QUERY_TIMEOUT` | |
+
 ## Properties
 
 | Property | Required | Description |

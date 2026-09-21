@@ -1,6 +1,7 @@
 """The Flask application: HTTP routes on top of the store, engine and formatters."""
 import hmac
 import logging
+import math
 
 from flask import Blueprint, Flask, Response, jsonify, redirect, request, url_for
 from flask.json.provider import DefaultJSONProvider
@@ -14,7 +15,7 @@ log = logging.getLogger('sql2api')
 bp = Blueprint('api', __name__)
 
 # Query-string arguments that control a request rather than supplying query parameters.
-RESERVED_ARGS = {'format', 'page', 'page_size', 'connection_name', 'version'}
+RESERVED_ARGS = {'format', 'page', 'page_size', 'connection_name', 'version', 'timeout'}
 PUBLIC_ENDPOINTS = {'api.index', 'api.favicon', 'api.health', 'api.docs', 'api.openapi_spec'}
 
 
@@ -105,6 +106,20 @@ def get_output_format(body=None):
     return output_format
 
 
+def get_timeout(body=None):
+    """Seconds allowed for the query: ?timeout= may lower the server limit but never raise it."""
+    raw = request.args.get('timeout', (body or {}).get('timeout'))
+    if raw in (None, ''):
+        return config.effective_timeout(None)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        raise ApiError('timeout must be a number of seconds') from None
+    if not math.isfinite(value) or value <= 0:
+        raise ApiError('timeout must be a positive number of seconds')
+    return config.effective_timeout(value)
+
+
 def render(result, output_format, page, page_size):
     response = jsonify({'message': 'No results returned'}) if not result else FORMATTERS[output_format](result)
     response.headers['X-Page'] = str(page)
@@ -126,8 +141,9 @@ def execute_sql_endpoint():
         raise ApiError('Connection name is missing')
     params = get_object(data.get('params'), 'params')
     output_format = get_output_format(data)
+    timeout = get_timeout(data)
     limit, offset, page = get_pagination()
-    result = engine.execute_sql(data['sql'], data['connection_name'], limit, offset, params)
+    result = engine.execute_sql(data['sql'], data['connection_name'], limit, offset, params, timeout)
     return render(result, output_format, page, limit)
 
 
@@ -148,11 +164,12 @@ def run_saved(ref, body, url_params):
     params = sqltools.coerce_params(saved.get('query_parameters'), raw)
     sql = sqltools.fill_placeholders(saved['sql_query'], params)
     output_format = get_output_format(body)
+    timeout = get_timeout(body)
     limit, offset, page = get_pagination()
 
     entry = {'executed_at': store.now(), 'connection_name': connection_name}
     try:
-        result, elapsed_ms = engine.timed(engine.execute_sql, sql, connection_name, limit, offset, params)
+        result, elapsed_ms = engine.timed(engine.execute_sql, sql, connection_name, limit, offset, params, timeout)
     except ApiError as error:
         store.record_execution(path, number, {**entry, 'status': 'error', 'error': error.message})
         raise
