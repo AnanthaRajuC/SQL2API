@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-21
+
 ### Added
 - Connection pooling for MySQL, PostgreSQL, ClickHouse and H2: connections are reused between requests instead of
   opened per request (`SQL2API_POOL_SIZE`, default 5 idle connections per distinct setting, `0` disables;
@@ -55,3 +57,7 @@ First public release, restructured from the original single-file application.
 - Database connections are always closed; ClickHouse queries no longer run twice.
 - JSON column order is preserved; Decimal, date and driver-specific number types serialise correctly.
 - Concurrent saves can no longer lose a version.
+
+[Unreleased]: https://github.com/AnanthaRajuC/SQL2API/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/AnanthaRajuC/SQL2API/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/AnanthaRajuC/SQL2API/releases/tag/v0.1.0
