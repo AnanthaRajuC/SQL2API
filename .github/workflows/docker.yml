@@ -63,7 +63,7 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: Build for this machine (to test it)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -100,7 +100,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build for amd64 and arm64${{ steps.meta.outputs.push == 'true' && ' and push' || ' (not pushing)' }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
