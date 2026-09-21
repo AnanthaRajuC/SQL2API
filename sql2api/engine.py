@@ -5,6 +5,7 @@ import time
 from . import config, store
 from .errors import ApiError
 from .formats import ResultSetDTO
+from .pool import get_pool
 from .runners import RUNNERS
 from .sqltools import validate_sql
 
@@ -18,7 +19,8 @@ def execute_sql(sql, connection_name, limit, offset, params=None, timeout=None):
     log.info('Executing on %s (%s), limit=%s offset=%s timeout=%s: %s',
              connection_name, details['db'], limit, offset, timeout, sql)
     try:
-        columns, rows = RUNNERS[details['db']](details, sql, params, limit, offset, not config.allow_writes(), timeout)
+        columns, rows = RUNNERS[details['db']](details, sql, params, limit, offset, not config.allow_writes(), timeout,
+                                             get_pool())
     except ApiError:
         raise
     except ImportError as error:

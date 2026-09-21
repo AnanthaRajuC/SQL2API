@@ -3,11 +3,12 @@ import json
 import os
 import sqlite3
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
 
-from sql2api import config, create_app, runners, sqltools
+from sql2api import config, create_app, engine, pool, runners, sqltools
 from sql2api.errors import ApiError
 from sql2api.formats import ResultSetDTO
 
@@ -322,7 +323,7 @@ class DriverWiringTests(unittest.TestCase):
         with mock.patch('psycopg2.connect', return_value=conn):
             with self.assertRaises(ApiError) as caught:
                 runners._run_postgres({'host': 'h'}, 'SELECT pg_sleep(9)', None, 5, 0, True, 1.5)
-        self.assertEqual(cursor.execute.call_args_list[0].args, ('SET statement_timeout = 1500',))
+        self.assertEqual(cursor.execute.call_args_list[0].args, ('SET LOCAL statement_timeout = 1500',))
         self.assertEqual(caught.exception.status, 504)
         conn.close.assert_called_once()
 
@@ -335,7 +336,8 @@ class DriverWiringTests(unittest.TestCase):
                 runners._run_clickhouse({'host': 'h'}, 'SELECT 1', None, 5, 0, True, 1.2)
         settings = client.execute.call_args.kwargs['settings']
         self.assertEqual(list(settings.items()), [('max_execution_time', 2), ('readonly', 1)])
-        self.assertEqual(ctor.call_args.kwargs['send_receive_timeout'], 7)
+        # socket backstop comes from the server-wide limit (default 30s) because one client serves many requests
+        self.assertEqual(ctor.call_args.kwargs['send_receive_timeout'], 35)
         self.assertEqual(caught.exception.status, 504)
         client.disconnect.assert_called_once()
 
@@ -382,6 +384,255 @@ class DriverWiringTests(unittest.TestCase):
                 runners._run_h2({'host': 'h', 'database': 'd'}, 'SELECT 1', None, 5, 0, True, 0.5)
         self.assertEqual(cursor.execute.call_args_list[0].args, ('SET QUERY_TIMEOUT 500',))
         self.assertEqual(caught.exception.status, 504)
+
+
+class FakeDriver(runners._Driver):
+    """Counts connects/closes so the pool's behaviour can be observed without a database."""
+
+    def __init__(self):
+        self.connects = 0
+        self.closed = []
+        self.alive = True
+        self.fail_reset = False
+        self.resets = 0
+
+    def connect(self, details, read_only):
+        self.connects += 1
+        return f'conn-{self.connects}'
+
+    def is_alive(self, session):
+        return self.alive
+
+    def reset(self, session):
+        self.resets += 1
+        if self.fail_reset:
+            raise RuntimeError('reset failed')
+
+    def close(self, session):
+        self.closed.append(session.conn)
+
+
+class PoolTests(unittest.TestCase):
+    def setUp(self):
+        self.driver = FakeDriver()
+        self.pool = pool.ConnectionPool()
+        self.details = {'host': 'h', 'user': 'u'}
+        patcher = mock.patch.dict(os.environ, {'SQL2API_POOL_SIZE': '2', 'SQL2API_POOL_IDLE_TIMEOUT': '300'})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def use(self, details=None, read_only=True):
+        with self.pool.checkout(self.driver, details or self.details, read_only) as session:
+            return session.conn
+
+    def test_idle_connection_is_reused_and_reset_each_time(self):
+        self.assertEqual(self.use(), 'conn-1')
+        self.assertEqual(self.use(), 'conn-1')
+        self.assertEqual(self.driver.connects, 1)
+        self.assertEqual(self.driver.resets, 2)
+        self.assertEqual(self.pool.idle_count(), 1)
+
+    def test_state_survives_reuse_but_not_across_connections(self):
+        with self.pool.checkout(self.driver, self.details, True) as session:
+            session.state['timeout'] = 5
+        with self.pool.checkout(self.driver, self.details, True) as session:
+            self.assertEqual(session.state, {'timeout': 5})
+
+    def test_different_settings_or_mode_never_share_a_connection(self):
+        first = self.use()
+        self.assertNotEqual(self.use({**self.details, 'password': 'other'}), first)
+        self.assertNotEqual(self.use(read_only=False), first)
+        self.assertEqual(self.use(), first)  # the original key still has its own connection
+
+    def test_failed_request_discards_the_connection(self):
+        with self.assertRaises(ValueError):
+            with self.pool.checkout(self.driver, self.details, True):
+                raise ValueError('boom')
+        self.assertEqual(self.driver.closed, ['conn-1'])
+        self.assertEqual(self.pool.idle_count(), 0)
+        self.assertEqual(self.use(), 'conn-2')
+
+    def test_only_pool_size_idle_connections_are_kept(self):
+        a, b, c = (self.pool.checkout(self.driver, self.details, True) for _ in range(3))
+        sessions = [ctx.__enter__() for ctx in (a, b, c)]  # three concurrent users -> three connections
+        self.assertEqual(self.driver.connects, 3)
+        for ctx in (a, b, c):
+            ctx.__exit__(None, None, None)
+        self.assertEqual(self.pool.idle_count(), 2)
+        self.assertEqual(len(self.driver.closed), 1)
+        self.assertEqual(len(sessions), 3)
+
+    def test_expired_idle_connections_are_closed_not_reused(self):
+        self.use()
+        with mock.patch.dict(os.environ, {'SQL2API_POOL_IDLE_TIMEOUT': '1'}):
+            for queue in self.pool._idle.values():
+                for session in queue:
+                    session.idle_since -= 10
+            self.assertEqual(self.use(), 'conn-2')
+        self.assertIn('conn-1', self.driver.closed)
+
+    def test_dead_connection_is_detected_before_reuse(self):
+        self.use()
+        for queue in self.pool._idle.values():
+            for session in queue:
+                session.idle_since -= pool.VALIDATE_AFTER + 1  # long enough idle to be worth checking
+        self.driver.alive = False
+        self.assertEqual(self.use(), 'conn-2')
+        self.assertIn('conn-1', self.driver.closed)
+
+    def test_recently_used_connection_is_trusted_without_a_check(self):
+        self.use()
+        self.driver.alive = False  # would be caught, but the connection was idle for less than VALIDATE_AFTER
+        self.assertEqual(self.use(), 'conn-1')
+
+    def test_connection_that_cannot_be_reset_is_closed(self):
+        self.driver.fail_reset = True
+        self.use()
+        self.assertEqual(self.driver.closed, ['conn-1'])
+        self.assertEqual(self.pool.idle_count(), 0)
+
+    def test_close_all_and_disabled_pool(self):
+        self.use()
+        self.pool.close_all()
+        self.assertEqual(self.driver.closed, ['conn-1'])
+        self.assertEqual(self.pool.idle_count(), 0)
+        self.assertIsNotNone(pool.get_pool())
+        with mock.patch.dict(os.environ, {'SQL2API_POOL_SIZE': '0'}):
+            self.assertIsNone(pool.get_pool())
+
+    def test_settings_parsing(self):
+        for junk, expected in (('abc', config.DEFAULT_POOL_SIZE), ('-3', 0), ('7', 7)):
+            with mock.patch.dict(os.environ, {'SQL2API_POOL_SIZE': junk}):
+                self.assertEqual(config.pool_size(), expected, junk)
+        for junk in ('abc', '0', '-1'):
+            with mock.patch.dict(os.environ, {'SQL2API_POOL_IDLE_TIMEOUT': junk}):
+                self.assertEqual(config.pool_idle_timeout(), config.DEFAULT_POOL_IDLE_TIMEOUT, junk)
+
+    def test_many_threads_share_the_pool_safely(self):
+        errors = []
+
+        def worker():
+            try:
+                for _ in range(40):
+                    with self.pool.checkout(self.driver, self.details, True) as session:
+                        self.assertTrue(session.conn.startswith('conn-'))
+            except Exception as error:  # noqa: BLE001 - report from the thread
+                errors.append(error)
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        self.assertLessEqual(self.driver.connects, 8 * 40)
+        self.assertLessEqual(self.pool.idle_count(), 2)
+        self.assertEqual(self.driver.connects - len(self.driver.closed), self.pool.idle_count())  # nothing leaked
+
+    def test_engine_only_hands_the_pool_to_runners_when_enabled(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {'SQL2API_HOME': tmp}):
+            with open(os.path.join(tmp, 'db_connections.json'), 'w') as f:
+                json.dump({'connections': {'c': {'db': 'mysql', 'host': 'h', 'active': True}}}, f)
+            recorder = mock.MagicMock(return_value=(['a'], [(1,)]))
+            with mock.patch.dict(engine.RUNNERS, {'mysql': recorder}):
+                engine.execute_sql('SELECT 1', 'c', 10, 0)
+                self.assertIs(recorder.call_args.args[-1], pool.get_pool())
+                self.assertIsNotNone(recorder.call_args.args[-1])
+                with mock.patch.dict(os.environ, {'SQL2API_POOL_SIZE': '0'}):
+                    engine.execute_sql('SELECT 1', 'c', 10, 0)
+                self.assertIsNone(recorder.call_args.args[-1])
+
+
+class PooledDriverTests(unittest.TestCase):
+    """What each driver does when its connection is borrowed repeatedly (mocked; real servers in test_integration)."""
+
+    def setUp(self):
+        self.pool = pool.ConnectionPool()
+        patcher = mock.patch.dict(os.environ, {'SQL2API_POOL_SIZE': '2'})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_mysql_reuses_the_connection_ends_each_transaction_and_applies_changed_limits_only(self):
+        cursor = mock.MagicMock()
+        cursor.description = [('a',)]
+        cursor.fetchall.return_value = [(1,)]
+        conn = mock.MagicMock()
+        conn.cursor.return_value = cursor
+        with mock.patch('mysql.connector.connect', return_value=conn) as connect:
+            for timeout in (2, 2, None):
+                runners._run_mysql({'host': 'h'}, 'SELECT 1', None, 5, 0, True, timeout, self.pool)
+        self.assertEqual(connect.call_count, 1)
+        self.assertEqual(conn.rollback.call_count, 3)  # a pooled connection must not keep a stale snapshot
+        conn.close.assert_not_called()
+        limits = [c.args[0] for c in cursor.execute.call_args_list if 'max_execution_time' in c.args[0]]
+        self.assertEqual(limits, ['SET SESSION max_execution_time = 2000',   # first use
+                                  'SET SESSION max_execution_time = 0'])     # limit removed again, not left at 2s
+
+    def test_postgres_sets_a_transaction_local_limit_on_every_use_and_rolls_back(self):
+        cursor = mock.MagicMock()
+        cursor.description = [('a',)]
+        cursor.fetchall.return_value = [(1,)]
+        conn = mock.MagicMock()
+        conn.closed = 0
+        conn.cursor.return_value.__enter__.return_value = cursor
+        with mock.patch('psycopg2.connect', return_value=conn) as connect:
+            for _ in range(2):
+                runners._run_postgres({'host': 'h'}, 'SELECT 1', None, 5, 0, True, 3, self.pool)
+        self.assertEqual(connect.call_count, 1)
+        conn.set_session.assert_called_once_with(readonly=True)
+        self.assertEqual(conn.rollback.call_count, 2)
+        local = [c.args[0] for c in cursor.execute.call_args_list if c.args[0].startswith('SET')]
+        self.assertEqual(local, ['SET LOCAL statement_timeout = 3000'] * 2)
+
+    def test_connection_used_by_a_failed_query_is_not_pooled(self):
+        client = mock.MagicMock()
+        client.execute.side_effect = RuntimeError('network down')
+        with mock.patch('clickhouse_driver.Client', return_value=client):
+            with self.assertRaises(RuntimeError):
+                runners._run_clickhouse({'host': 'h'}, 'SELECT 1', None, 5, 0, True, 1, self.pool)
+        client.disconnect.assert_called_once()
+        self.assertEqual(self.pool.idle_count(), 0)
+
+    def test_clickhouse_client_is_reused(self):
+        client = mock.MagicMock()
+        client.execute.return_value = ([(1,)], [('a', 'UInt8')])
+        with mock.patch('clickhouse_driver.Client', return_value=client) as ctor:
+            for _ in range(3):
+                runners._run_clickhouse({'host': 'h'}, 'SELECT 1', None, 5, 0, True, 1, self.pool)
+        self.assertEqual(ctor.call_count, 1)
+        client.disconnect.assert_not_called()
+
+    def test_h2_threads_are_attached_to_the_jvm_as_daemons_so_shutdown_cannot_hang(self):
+        import jpype
+        thread = mock.MagicMock()
+        fake_java = mock.MagicMock()
+        fake_java.lang.Thread = thread
+        # patch the module dict: reading the real jpype.java would demand a running JVM
+        with mock.patch('jpype.isJVMStarted', return_value=True), mock.patch.dict(jpype.__dict__, {'java': fake_java}):
+            thread.isAttached.return_value = False
+            runners._attach_thread_as_daemon()
+            thread.attachAsDaemon.assert_called_once()
+            thread.attachAsDaemon.reset_mock()
+            thread.isAttached.return_value = True  # already attached: leave it alone
+            runners._attach_thread_as_daemon()
+            thread.attachAsDaemon.assert_not_called()
+        with mock.patch('jpype.isJVMStarted', return_value=False):  # nothing to attach to before the JVM starts
+            runners._attach_thread_as_daemon()
+
+    def test_h2_dead_connection_is_replaced(self):
+        first, second = mock.MagicMock(), mock.MagicMock()
+        for conn in (first, second):
+            conn.cursor.return_value.description = [('C',)]
+            conn.cursor.return_value.fetchall.return_value = [(1,)]
+        first.jconn.isValid.return_value = False
+        with mock.patch('jaydebeapi.connect', side_effect=[first, second]) as connect:
+            runners._run_h2({'host': 'h', 'database': 'd'}, 'SELECT 1', None, 5, 0, True, None, self.pool)
+            for queue in self.pool._idle.values():
+                for session in queue:
+                    session.idle_since -= pool.VALIDATE_AFTER + 1
+            runners._run_h2({'host': 'h', 'database': 'd'}, 'SELECT 1', None, 5, 0, True, None, self.pool)
+        self.assertEqual(connect.call_count, 2)
+        first.close.assert_called_once()
 
 
 class ParameterTests(ApiTestCase):
@@ -558,6 +809,16 @@ class NamedQueryTests(ApiTestCase):
         self.assertFalse(os.path.exists(os.path.join(self.saved_dir, 'x.json')))
         self.assertEqual(self.client.delete('/saved_sql/x').status_code, 404)
         self.assertEqual(self.client.delete('/saved_sql/..%2Fdb_connections').status_code, 404)
+
+    def test_changing_or_deleting_a_connection_closes_its_pooled_connections(self):
+        with mock.patch('sql2api.app.pool.close_pooled_connections') as close:
+            self.client.patch('/connections', json={'connections': {
+                'new': {'db': 'sqlite', 'database': 'x.db', 'active': True}}})
+            self.assertEqual(close.call_count, 1)
+            self.client.delete('/connections/new')
+            self.assertEqual(close.call_count, 2)
+            self.client.patch('/connections', json={'connections': {'bad': {'db': 'oracle'}}})  # rejected: no change
+            self.assertEqual(close.call_count, 2)
 
     def test_delete_connection(self):
         self.assertEqual(self.client.delete('/connections/off').status_code, 200)

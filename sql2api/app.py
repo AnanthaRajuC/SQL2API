@@ -7,7 +7,7 @@ from flask import Blueprint, Flask, Response, jsonify, redirect, request, url_fo
 from flask.json.provider import DefaultJSONProvider
 from werkzeug.exceptions import HTTPException
 
-from . import config, engine, openapi, sqltools, store
+from . import config, engine, openapi, pool, sqltools, store
 from .errors import ApiError
 from .formats import FORMATTERS, json_default
 
@@ -273,12 +273,14 @@ def update_connections():
     if not connections or not isinstance(connections, dict):
         raise ApiError('Connections data is missing')
     store.update_connections(connections)
+    pool.close_pooled_connections()  # new settings or credentials must not be served by old connections
     return jsonify({'message': 'Connections updated successfully'}), 200
 
 
 @bp.route('/connections/<name>', methods=['DELETE'])
 def delete_connection(name):
     store.delete_connection(name)
+    pool.close_pooled_connections()  # a removed connection must not keep serving from idle sockets
     return jsonify({'message': f"Connection '{name}' deleted"}), 200
 
 

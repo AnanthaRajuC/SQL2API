@@ -29,7 +29,8 @@ The `sql2api` package is a small Flask application:
 |--------|----------------|
 | `app.py` | Flask app factory and HTTP routes |
 | `engine.py` | Looks up the connection, validates the SQL, runs it, wraps the page of results |
-| `runners.py` | One runner per database type: connect, bind parameters in the driver's style, run, close |
+| `runners.py` | One driver per database type: connect, bind parameters in the driver's style, run, reset |
+| `pool.py` | Thread-safe pool of idle connections (reset on return, health-checked, discarded after errors) |
 | `sqltools.py` | SQL validation (single statement, read-only), pagination, `:name` binding and `{name}` substitution |
 | `formats.py` | Result set and the JSON / NDJSON / CSV / TSV / XML / YAML / XLSX converters |
 | `store.py` | Connection registry and saved-query files; all file access is confined to the data folder |
