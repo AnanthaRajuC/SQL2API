@@ -7,6 +7,8 @@ PASSWORD_MASK = '********'
 CONNECT_TIMEOUT = 10  # seconds
 HISTORY_LIMIT = 50  # executions remembered per saved-query version
 DEFAULT_QUERY_TIMEOUT = 30.0  # seconds
+DEFAULT_POOL_SIZE = 5  # idle connections kept per distinct connection
+DEFAULT_POOL_IDLE_TIMEOUT = 300.0  # seconds
 
 # Ships with the package; override with SQL2API_H2_JAR to use a different H2 version.
 BUNDLED_H2_JAR = Path(__file__).parent / 'lib' / 'h2-2.2.224.jar'
@@ -73,6 +75,23 @@ def effective_timeout(requested=None):
     if requested is None:
         return limit
     return requested if limit is None else min(requested, limit)
+
+
+def pool_size():
+    """Idle connections kept per distinct connection (SQL2API_POOL_SIZE); 0 disables pooling."""
+    try:
+        return max(0, int(os.environ.get('SQL2API_POOL_SIZE', DEFAULT_POOL_SIZE)))
+    except ValueError:
+        return DEFAULT_POOL_SIZE
+
+
+def pool_idle_timeout():
+    """Seconds an idle pooled connection is kept before it is closed (SQL2API_POOL_IDLE_TIMEOUT)."""
+    try:
+        value = float(os.environ.get('SQL2API_POOL_IDLE_TIMEOUT', DEFAULT_POOL_IDLE_TIMEOUT))
+    except ValueError:
+        return DEFAULT_POOL_IDLE_TIMEOUT
+    return value if value > 0 else DEFAULT_POOL_IDLE_TIMEOUT
 
 
 def max_page_size():

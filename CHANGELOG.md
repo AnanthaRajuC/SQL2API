@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Connection pooling for MySQL, PostgreSQL, ClickHouse and H2: connections are reused between requests instead of
+  opened per request (`SQL2API_POOL_SIZE`, default 5 idle connections per distinct setting, `0` disables;
+  `SQL2API_POOL_IDLE_TIMEOUT`, default 300 s). Against a local server, per-request time for a trivial query dropped
+  from about 14 ms to 0.5 ms on MySQL and H2; ClickHouse barely changed (about 1.2 ms to 1.0 ms).
+  Connections are reset between users, health-checked after idling, discarded after errors, and closed at once when
+  a connection is changed or deleted through the API.
 - Query time limit: statements are cancelled on the database after `SQL2API_QUERY_TIMEOUT` seconds (default 30,
   `0` disables) and the request fails with HTTP 504. A request can lower the limit with `?timeout=` (or a `timeout`
   field in the body) but never raise it. Enforced natively on MySQL/MariaDB, PostgreSQL, ClickHouse, SQLite and H2.
@@ -13,6 +19,10 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - Queries that run longer than 30 seconds are now cancelled by default. Set `SQL2API_QUERY_TIMEOUT=0` to restore the
   previous unlimited behaviour.
+
+### Fixed
+- The process could hang on exit after H2 had served concurrent requests: JPype waited forever for worker threads
+  that jaydebeapi had attached to the JVM as non-daemon threads. Threads that use H2 are now attached as daemons.
 
 ## [0.1.0] - 2026-09-21
 

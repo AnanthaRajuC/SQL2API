@@ -15,7 +15,7 @@ import time
 import unittest
 from unittest import mock
 
-from sql2api import create_app, runners
+from sql2api import create_app, pool, runners
 
 CREATE = {
     'postgres': 'CREATE TABLE sql2api_it (id INT, name VARCHAR(50), price NUMERIC(8, 2), added TIMESTAMP)',
@@ -36,6 +36,8 @@ class IntegrationBase:
     db = None  # set by subclasses
     env_var = None
     slow_sql = None  # a statement that would run for minutes
+    finite_slow_sql = None  # a statement that takes about two seconds
+    connection_id_sql = None  # returns an id that identifies the database connection serving it
 
     @classmethod
     def setUpClass(cls):
@@ -123,6 +125,56 @@ class IntegrationBase:
         self.assertIn('time limit', res.get_json()['error'])
         self.assertEqual(len(self.query('SELECT * FROM sql2api_it', '?page_size=100').get_json()), 7)
 
+    # ---- connection pooling ----------------------------------------------------------
+
+    def connection_ids(self, count):
+        return [list(self.query(self.connection_id_sql).get_json()[0].values())[0] for _ in range(count)]
+
+    def test_connections_are_reused_when_pooled(self):
+        if not self.connection_id_sql:
+            self.skipTest('no connection id query for this database')
+        self.assertEqual(len(set(self.connection_ids(4))), 1)
+
+    def test_every_request_gets_its_own_connection_when_pooling_is_disabled(self):
+        if not self.connection_id_sql:
+            self.skipTest('no connection id query for this database')
+        with mock.patch.dict(os.environ, {'SQL2API_POOL_SIZE': '0'}):
+            self.assertEqual(len(set(self.connection_ids(3))), 3)
+
+    def test_pooled_connection_sees_data_committed_elsewhere(self):
+        before = self.query('SELECT COUNT(*) AS n FROM sql2api_it').get_json()[0]
+        before = list(before.values())[0]
+        # a separate, unpooled connection inserts and commits
+        runners.RUNNERS[self.db](self.details, INSERT[self.db].format(i=8), None, 10, 0, False, None, None)
+        after = list(self.query('SELECT COUNT(*) AS n FROM sql2api_it').get_json()[0].values())[0]
+        self.assertEqual((int(before), int(after)), (7, 8))
+
+    def test_a_request_limit_does_not_leak_to_the_next_user_of_the_connection(self):
+        if not self.finite_slow_sql:
+            self.skipTest('no two-second statement for this database')
+        self.assertEqual(self.query('SELECT 1 AS one', '?timeout=1').status_code, 200)  # leaves a 1s limit behind?
+        started = time.monotonic()
+        res = self.query(self.finite_slow_sql)  # server default limit (30s) must apply again
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
+        self.assertGreater(time.monotonic() - started, 1.5, 'the previous request\'s 1 second limit cut this one short')
+
+    def test_read_only_mode_holds_on_a_reused_connection(self):
+        shared = pool.get_pool()
+        self.assertIsNotNone(shared)
+        run = runners.RUNNERS[self.db]
+        run(self.details, 'SELECT * FROM sql2api_it', None, 10, 0, True, 5, shared)  # warms the pool
+        if self.db != 'h2':  # H2 relies on the SQL guard instead (see H2Tests)
+            with self.assertRaises(Exception):  # noqa: B017 - each driver raises its own error type
+                run(self.details, 'DELETE FROM sql2api_it', None, 10, 0, True, 5, shared)
+        self.assertEqual(len(self.query('SELECT * FROM sql2api_it', '?page_size=100').get_json()), 7)
+
+    def test_concurrent_requests_all_succeed(self):
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            results = list(executor.map(lambda i: self.query('SELECT id FROM sql2api_it ORDER BY id',
+                                                             '?page_size=3').status_code, range(30)))
+        self.assertEqual(set(results), {200})
+
     def test_saved_query_end_to_end(self):
         self.client.patch('/save_sql_to_file', json={
             'author': 'it', 'description': 'd', 'filename': 'it_query', 'connection_name': 'it',
@@ -144,10 +196,14 @@ class DriverReadOnlyMixin:
 class PostgresTests(DriverReadOnlyMixin, IntegrationBase, unittest.TestCase):
     db, env_var = 'postgres', 'SQL2API_IT_POSTGRES'
     slow_sql = 'SELECT pg_sleep(60)'
+    finite_slow_sql = 'SELECT pg_sleep(2)'
+    connection_id_sql = 'SELECT pg_backend_pid() AS id'
 
 
 class MySQLTests(DriverReadOnlyMixin, IntegrationBase, unittest.TestCase):
     db, env_var = 'mysql', 'SQL2API_IT_MYSQL'
+    finite_slow_sql = 'SELECT SLEEP(2) AS s'
+    connection_id_sql = 'SELECT CONNECTION_ID() AS id'
     # (SLEEP() and BENCHMARK() are cut short by MySQL's limit but return normally instead of raising an error)
     slow_sql = 'SELECT COUNT(*) FROM ' + ', '.join(f'information_schema.columns c{i}' for i in range(4))
 
@@ -155,12 +211,14 @@ class MySQLTests(DriverReadOnlyMixin, IntegrationBase, unittest.TestCase):
 class ClickHouseTests(DriverReadOnlyMixin, IntegrationBase, unittest.TestCase):
     db, env_var = 'clickhouse', 'SQL2API_IT_CLICKHOUSE'
     slow_sql = 'SELECT count() FROM numbers(100000000000)'
+    finite_slow_sql = 'SELECT sleep(2) AS s'
 
 
 class H2Tests(IntegrationBase, unittest.TestCase):
     # H2's JDBC read-only flag is only a hint, so it relies on the SQL guard (covered by test_writes_are_blocked).
     db, env_var = 'h2', 'SQL2API_IT_H2'
     slow_sql = 'SELECT COUNT(*) FROM SYSTEM_RANGE(1, 100000) a, SYSTEM_RANGE(1, 100000) b WHERE (a.x * b.x) % 7 = 3'
+    connection_id_sql = 'SELECT SESSION_ID() AS id'
 
 
 if __name__ == '__main__':

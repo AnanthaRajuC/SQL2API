@@ -47,6 +47,23 @@ cancelled and its resources released rather than merely abandoned:
 | `sqlite` | progress handler | Checked every 10 000 VM instructions. |
 | `h2` | `SET QUERY_TIMEOUT` | |
 
+## Connection pooling
+
+MySQL, PostgreSQL, ClickHouse and H2 connections are kept open and reused between requests (SQLite is a local file
+and is opened per request). Tune it with `SQL2API_POOL_SIZE` (idle connections kept per distinct connection
+setting, default 5, `0` disables pooling) and `SQL2API_POOL_IDLE_TIMEOUT` (seconds, default 300).
+
+- **Clean hand-over.** A connection's transaction is ended before it is reused, so a request never sees a stale
+  snapshot, and query limits are applied per request (or per transaction) so they never leak to the next user.
+- **Errors.** A connection used by a failed or timed-out request is closed rather than reused.
+- **Health checks.** A connection that sat idle for more than a few seconds is checked before reuse; a dead one is
+  replaced transparently.
+- **Changes take effect.** `PATCH`/`DELETE /connections` close all idle pooled connections immediately. If you edit
+  `db_connections.json` by hand, old connections are dropped as they reach the idle timeout.
+- **Sizing.** The pool bounds *idle* connections, not concurrent ones. Each server process has its own pool, so the
+  most idle connections your database sees is roughly `SQL2API_POOL_SIZE` x distinct connections x worker processes;
+  keep that below the database's `max_connections`.
+
 ## Properties
 
 | Property | Required | Description |
