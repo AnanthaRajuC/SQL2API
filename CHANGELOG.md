@@ -15,7 +15,7 @@ First public release, restructured from the original single-file application.
 - Execution history recorded per saved-query version (last 50 runs, with status, row count and duration).
 - `X-Page`, `X-Page-Size` and `X-Has-More` response headers; `ndjson` output format.
 - `${ENV_VAR}` references in connection settings so secrets can stay out of `db_connections.json`.
-- OpenAPI description at `/openapi.json`, Swagger UI at `/docs`, and a `/health` endpoint.
+- OpenAPI description at `/openapi.json`, Swagger UI at `/docs` (`/` redirects there), and a `/health` endpoint.
 - Read-only-by-default execution (`SQL2API_ALLOW_WRITES`), optional API key (`SQL2API_API_KEY`),
   page size limit (`SQL2API_MAX_PAGE_SIZE`) and configurable data folder (`SQL2API_HOME`).
 - Dockerfile, GitHub Actions CI (unit tests plus integration tests against PostgreSQL, MySQL, ClickHouse and H2),

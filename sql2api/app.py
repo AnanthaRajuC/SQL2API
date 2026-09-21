@@ -2,7 +2,7 @@
 import hmac
 import logging
 
-from flask import Blueprint, Flask, Response, jsonify, request
+from flask import Blueprint, Flask, Response, jsonify, redirect, request, url_for
 from flask.json.provider import DefaultJSONProvider
 from werkzeug.exceptions import HTTPException
 
@@ -15,7 +15,7 @@ bp = Blueprint('api', __name__)
 
 # Query-string arguments that control a request rather than supplying query parameters.
 RESERVED_ARGS = {'format', 'page', 'page_size', 'connection_name', 'version'}
-PUBLIC_ENDPOINTS = {'api.health', 'api.docs', 'api.openapi_spec'}
+PUBLIC_ENDPOINTS = {'api.index', 'api.favicon', 'api.health', 'api.docs', 'api.openapi_spec'}
 
 
 class JSONProvider(DefaultJSONProvider):
@@ -268,6 +268,16 @@ def delete_connection(name):
 # --------------------------------------------------------------------------------------
 # Service endpoints
 # --------------------------------------------------------------------------------------
+
+@bp.route('/', methods=['GET'])
+def index():
+    return redirect(url_for('api.docs'))
+
+
+@bp.route('/favicon.ico', methods=['GET'])
+def favicon():
+    return '', 204
+
 
 @bp.route('/health', methods=['GET'])
 def health():

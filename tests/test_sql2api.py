@@ -466,6 +466,13 @@ class ServiceEndpointTests(ApiTestCase):
         self.assertIn('/q/{name}', spec['paths'])
         self.assertEqual(self.client.get('/connections').status_code, 401)
 
+    def test_root_redirects_to_docs_even_with_an_api_key(self):
+        os.environ['SQL2API_API_KEY'] = 'k3y'
+        res = self.client.get('/')
+        self.assertEqual(res.status_code, 302)
+        self.assertTrue(res.headers['Location'].endswith('/docs'))
+        self.assertEqual(self.client.get('/favicon.ico').status_code, 204)
+
     def test_unknown_route_returns_json(self):
         res = self.client.get('/nope')
         self.assertEqual(res.status_code, 404)
