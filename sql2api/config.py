@@ -6,6 +6,7 @@ SUPPORTED_DB_TYPES = ('mysql', 'postgres', 'clickhouse', 'sqlite', 'h2')
 PASSWORD_MASK = '********'
 CONNECT_TIMEOUT = 10  # seconds
 HISTORY_LIMIT = 50  # executions remembered per saved-query version
+DEFAULT_QUERY_TIMEOUT = 30.0  # seconds
 
 # Ships with the package; override with SQL2API_H2_JAR to use a different H2 version.
 BUNDLED_H2_JAR = Path(__file__).parent / 'lib' / 'h2-2.2.224.jar'
@@ -53,6 +54,25 @@ def allow_writes():
 
 def api_key():
     return os.environ.get('SQL2API_API_KEY') or None
+
+
+def query_timeout():
+    """Server-wide statement time limit in seconds (SQL2API_QUERY_TIMEOUT); None when disabled (set to 0)."""
+    try:
+        value = float(os.environ.get('SQL2API_QUERY_TIMEOUT', DEFAULT_QUERY_TIMEOUT))
+    except ValueError:
+        return DEFAULT_QUERY_TIMEOUT
+    if value == 0:
+        return None
+    return value if value > 0 else DEFAULT_QUERY_TIMEOUT
+
+
+def effective_timeout(requested=None):
+    """The limit to enforce: a request may ask for less time than the server allows, never more."""
+    limit = query_timeout()
+    if requested is None:
+        return limit
+    return requested if limit is None else min(requested, limit)
 
 
 def max_page_size():

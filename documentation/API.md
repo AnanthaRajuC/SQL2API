@@ -29,6 +29,7 @@ These apply to every endpoint that returns rows.
 | `format` | `json` | `json`, `ndjson`, `csv`, `tsv`, `xml`, `yaml` or `xlsx`. For the POST endpoints it may also be given in the JSON body. |
 | `page` | `1` | 1-based page number. |
 | `page_size` | `10` | Rows per page, at most `SQL2API_MAX_PAGE_SIZE` (default 1000). |
+| `timeout` | server limit | Seconds the query may run before it is cancelled with a 504. It can lower the server limit (`SQL2API_QUERY_TIMEOUT`, default 30; `0` disables it) but never raise it. For the POST endpoints it may also be given in the JSON body. |
 
 Any trailing `LIMIT`/`OFFSET` in the SQL is replaced by the requested page. Responses carry
 `X-Page`, `X-Page-Size` and `X-Has-More` (`true` when another page exists). A query that returns no rows answers
@@ -161,3 +162,4 @@ Errors are returned as `{"error": "..."}`; failed queries also include `"detail"
 | 403 | Inactive connection, write statement while writes are disabled, or a file outside `saved_sql/` |
 | 404 | Unknown connection, saved query, version or file |
 | 500 | The database rejected the query or could not be reached |
+| 504 | The query exceeded its time limit and was cancelled (the response includes `"timeout"`) |
