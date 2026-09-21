@@ -108,6 +108,9 @@ Everything is configured through environment variables (all optional):
 | `SQL2API_ALLOW_WRITES` | off | Allow `INSERT`/`UPDATE`/DDL. Otherwise only single read-only statements are accepted. |
 | `SQL2API_API_KEY` | unset | When set, every request (except `/health` and `/docs`) needs a matching `X-API-Key` header. |
 | `SQL2API_MAX_PAGE_SIZE` | `1000` | Upper limit for `page_size`. |
+| `SQL2API_CORS_ORIGINS` | unset | Websites allowed to call the API from a browser: comma-separated origins such as `https://app.example.com`, or `*`. Off by default. |
+| `SQL2API_RATE_LIMIT` | unset | Requests allowed per client address, e.g. `60/minute` (also `second`, `hour`, `day`). Off by default; a malformed value stops startup. |
+| `SQL2API_TRUST_PROXY` | `0` | Number of reverse proxies in front of the app whose `X-Forwarded-*` headers are trusted. Set it (usually `1`) behind nginx, a load balancer or a platform router, or every client looks like the proxy. |
 | `SQL2API_POOL_SIZE` | `5` | Idle connections kept per distinct connection setting. `0` turns pooling off. |
 | `SQL2API_POOL_IDLE_TIMEOUT` | `300` | Seconds an idle pooled connection is kept before it is closed. |
 | `SQL2API_QUERY_TIMEOUT` | `30` | Seconds a query may run before it is cancelled (HTTP 504). `0` disables the limit. A request can lower it with `?timeout=`, never raise it. |
@@ -127,6 +130,27 @@ SQL2API runs whatever SQL it is given against your databases, so it ships locked
 - Saved-query files are only read from `saved_sql/`; passwords are never returned by the API.
 
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+### Calling the API from a browser
+
+Browsers refuse cross-origin JSON calls unless the server allows them. List the sites that may call the API:
+
+~~~bash
+SQL2API_API_KEY=change-me SQL2API_CORS_ORIGINS=https://app.example.com sql2api serve
+~~~
+
+Preflight checks are answered automatically, and the pagination headers (`X-Has-More` etc.) are exposed to the page's
+JavaScript. CORS only tells the *browser* which sites may call; it is not authentication, so keep the API key. Avoid
+`*` without a key: any website a visitor opens could then reach your databases through their browser (the server logs
+a warning if you start that way).
+
+### Rate limiting
+
+`SQL2API_RATE_LIMIT=60/minute` gives each client address a bucket of 60 requests that refills steadily, so short bursts
+work but the sustained rate is capped. Over the limit, requests get `429` with a `Retry-After` header, and every
+response carries `X-RateLimit-Limit` and `X-RateLimit-Remaining`. The limit is applied before the API key check, so
+guessing keys is throttled too; `/health` and CORS preflights are never counted. State is per process: with several
+workers, the effective limit is multiplied by the number of workers.
 
 ## Docker
 

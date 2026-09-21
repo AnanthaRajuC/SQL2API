@@ -2,6 +2,7 @@
 import argparse
 import logging
 import os
+import sys
 
 from . import __version__, config, store
 from .app import create_app
@@ -10,7 +11,11 @@ LOOPBACK_HOSTS = ('127.0.0.1', 'localhost', '::1')
 
 
 def _serve(args):
-    app = create_app()
+    try:
+        app = create_app()
+    except ValueError as error:  # a malformed setting, e.g. SQL2API_RATE_LIMIT
+        print(f'sql2api: {error}', file=sys.stderr)
+        return 2
     if args.host not in LOOPBACK_HOSTS and not config.api_key():
         logging.getLogger('sql2api').warning(
             'Listening on %s without SQL2API_API_KEY set: anyone who can reach this port can run SQL '

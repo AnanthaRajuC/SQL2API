@@ -19,7 +19,7 @@ _ROWS = {'description': 'The requested page. Header X-Has-More says whether anot
          'headers': {'X-Page': {'schema': {'type': 'integer'}}, 'X-Page-Size': {'schema': {'type': 'integer'}},
                      'X-Has-More': {'schema': {'type': 'string', 'enum': ['true', 'false']}}},
          'content': {'application/json': {'schema': {'type': 'array', 'items': {'type': 'object'}}}}}
-_ERRORS = {c: {'$ref': '#/components/responses/Error'} for c in ('400', '401', '403', '404', '500', '504')}
+_ERRORS = {c: {'$ref': '#/components/responses/Error'} for c in ('400', '401', '403', '404', '429', '500', '504')}
 
 
 def _object_schema(properties, required=()):

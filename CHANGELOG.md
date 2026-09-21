@@ -14,6 +14,14 @@ All notable changes to this project are documented here. The format follows
   the docs page has a box for the key.
 - The Release workflow now refuses to publish when the tag does not match `sql2api.__version__`, is not on `main`,
   or has no dated changelog section.
+- CORS support for browser clients (`SQL2API_CORS_ORIGINS`, off by default): allowed origins are echoed back,
+  preflight requests are answered without an API key, and the pagination and rate-limit headers are exposed to the
+  page. Starting with `*` and no API key logs a warning.
+- Rate limiting (`SQL2API_RATE_LIMIT`, e.g. `60/minute`, off by default): a per-client token bucket answering `429` with
+  `Retry-After`, plus `X-RateLimit-Limit`/`X-RateLimit-Remaining` headers. It runs before the API key check so key
+  guessing is throttled; `/health` and preflights are exempt. A malformed value stops startup.
+- `SQL2API_TRUST_PROXY` (number of reverse proxies) makes the app use the client address and scheme from
+  `X-Forwarded-*` headers; without it those headers are ignored so they cannot be forged.
 
 ### Changed
 - Saving a query validates its `query_parameters` and rejects declarations that the SQL does not use.
