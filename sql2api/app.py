@@ -8,6 +8,7 @@ from flask.json.provider import DefaultJSONProvider
 from werkzeug.exceptions import HTTPException
 
 from . import config, engine, openapi, pool, sqltools, store
+from . import params as param_rules
 from .errors import ApiError
 from .formats import FORMATTERS, json_default
 
@@ -45,12 +46,8 @@ def create_app():
 
     @app.before_request
     def require_api_key():
-        expected = config.api_key()
-        if expected and request.endpoint not in PUBLIC_ENDPOINTS:
-            # compare_digest rejects non-ASCII str, so compare bytes
-            supplied = request.headers.get('X-API-Key', '').encode('utf-8', 'replace')
-            if not hmac.compare_digest(supplied, expected.encode('utf-8')):
-                return jsonify({'error': 'Unauthorized'}), 401
+        if request.endpoint not in PUBLIC_ENDPOINTS and not has_valid_key():
+            return jsonify({'error': 'Unauthorized'}), 401
 
     app.register_blueprint(bp)
     return app
@@ -59,6 +56,16 @@ def create_app():
 # --------------------------------------------------------------------------------------
 # Request helpers
 # --------------------------------------------------------------------------------------
+
+def has_valid_key():
+    """True when no API key is configured, or the request carries the right X-API-Key header."""
+    expected = config.api_key()
+    if not expected:
+        return True
+    # compare_digest rejects non-ASCII str, so compare bytes
+    supplied = request.headers.get('X-API-Key', '').encode('utf-8', 'replace')
+    return hmac.compare_digest(supplied, expected.encode('utf-8'))
+
 
 def get_json_body(required=True):
     data = request.get_json(silent=True)
@@ -161,15 +168,16 @@ def run_saved(ref, body, url_params):
 
     raw = {**url_params, **get_object(body.get('params'), 'params'),
            **get_object(body.get('placeholders'), 'placeholders')}
-    params = sqltools.coerce_params(saved.get('query_parameters'), raw)
-    sql = sqltools.fill_placeholders(saved['sql_query'], params)
+    used = set(sqltools.placeholder_names(saved['sql_query']))
+    values = param_rules.resolve(saved.get('query_parameters'), raw, used=used)
+    sql = sqltools.fill_placeholders(saved['sql_query'], values)
     output_format = get_output_format(body)
     timeout = get_timeout(body)
     limit, offset, page = get_pagination()
 
     entry = {'executed_at': store.now(), 'connection_name': connection_name}
     try:
-        result, elapsed_ms = engine.timed(engine.execute_sql, sql, connection_name, limit, offset, params, timeout)
+        result, elapsed_ms = engine.timed(engine.execute_sql, sql, connection_name, limit, offset, values, timeout)
     except ApiError as error:
         store.record_execution(path, number, {**entry, 'status': 'error', 'error': error.message})
         raise
@@ -214,6 +222,11 @@ def save_sql_to_file():
     if not isinstance(tags, (list, str)):
         raise ApiError('tags must be a string or a list')
     query_parameters = get_object(data.get('query_parameters'), 'query_parameters')
+    param_rules.parse_definitions(query_parameters)
+    unused = sorted(set(query_parameters) - set(sqltools.placeholder_names(data['sql_query'])))
+    if unused:
+        raise ApiError(f"query_parameters declares {', '.join(unused)}, which sql_query does not use "
+                       '(write :name in the SQL, or remove the declaration)')
     connection_name = data.get('connection_name')
     if connection_name is not None and not isinstance(connection_name, str):
         raise ApiError('connection_name must be a string')
@@ -304,10 +317,31 @@ def health():
     return jsonify({'status': 'ok', 'version': current_app.config['SQL2API_VERSION']})
 
 
+def describe_saved_queries():
+    """What the OpenAPI document needs to know about each saved query (never its SQL text)."""
+    described = []
+    for name, number, data in store.latest_versions():
+        sql = data.get('sql_query')
+        if not isinstance(sql, str):
+            continue
+        declared = param_rules.read_definitions(data.get('query_parameters'))
+        used = sqltools.placeholder_names(sql)
+        parameters = {}
+        for param in used:  # what the SQL needs, in order; undeclared ones are plain required text
+            parameters[param] = declared.get(param) or param_rules.read_definition({})
+        described.append({'name': name, 'version': number, 'description': data.get('description'),
+                          'tags': data.get('tags'), 'connection_name': data.get('connection_name'),
+                          'parameters': parameters})
+    return described
+
+
 @bp.route('/openapi.json', methods=['GET'])
 def openapi_spec():
     from flask import current_app
-    return jsonify(openapi.build_spec(current_app.config['SQL2API_VERSION']))
+    # The generic API description is public. The list of saved queries (names, descriptions, parameters) is only
+    # shown to callers who could list them anyway, so an API key protects it too.
+    saved = describe_saved_queries() if has_valid_key() else None
+    return jsonify(openapi.build_spec(current_app.config['SQL2API_VERSION'], saved))
 
 
 @bp.route('/docs', methods=['GET'])

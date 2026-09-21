@@ -5,6 +5,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Parameter rules for saved queries: besides a type, `query_parameters` can declare `default`, `required`, `enum`,
+  `min`/`max`, `min_length`/`max_length`, `pattern` and `description`. Violations are rejected with a 400 that lists
+  every problem in an `errors` map; optional parameters without a value are bound as NULL.
+- Every saved query is documented as its own endpoint in `/openapi.json` and `/docs`, with its parameters, rules and
+  default connection (never its SQL). With an API key set, this section is only shown to authenticated readers, and
+  the docs page has a box for the key.
+- The Release workflow now refuses to publish when the tag does not match `sql2api.__version__`, is not on `main`,
+  or has no dated changelog section.
+
+### Changed
+- Saving a query validates its `query_parameters` and rejects declarations that the SQL does not use.
+- Requests rejected by parameter validation are not recorded in `execution_history`.
+
+### Fixed
+- The OpenAPI document was not valid OpenAPI 3.0 (`exclusiveMinimum: 0` and empty `required` lists), which strict
+  tools and client generators reject. It is now validated in the test suite.
+
 ## [0.2.0] - 2026-09-21
 
 ### Added

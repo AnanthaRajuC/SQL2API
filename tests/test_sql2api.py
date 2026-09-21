@@ -635,6 +635,176 @@ class PooledDriverTests(unittest.TestCase):
         first.close.assert_called_once()
 
 
+RULES_SQL = ('SELECT actor_id, name FROM actor WHERE actor_id >= :min_id AND (:q IS NULL OR name LIKE :q) '
+             'ORDER BY actor_id')
+RULES = {'min_id': {'type': 'int', 'min': 1, 'max': 25, 'default': 1, 'description': 'First actor id to include'},
+         'q': {'type': 'str', 'required': False, 'min_length': 2, 'description': 'Name filter, e.g. Actor 2%'}}
+
+
+class ParameterRuleApiTests(ApiTestCase):
+    def save_rules(self, filename='rules', **extra):
+        return self.save(filename, sql=RULES_SQL, query_parameters=RULES, connection_name='lite', **extra)
+
+    def test_rules_are_validated_when_a_query_is_saved(self):
+        self.assertEqual(self.save_rules().status_code, 200)
+        res = self.save('bad', sql='SELECT :a', query_parameters={'a': {'type': 'int', 'min': 5, 'max': 1},
+                                                                   'b': {'colour': 'red'}})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(set(res.get_json()['errors']), {'a', 'b'})
+        self.assertFalse(os.path.exists(os.path.join(self.saved_dir, 'bad.json')))
+
+    def test_declaring_a_parameter_the_sql_does_not_use_is_rejected(self):
+        res = self.save('typo', sql='SELECT :id', query_parameters={'idd': 'int'})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('idd', res.get_json()['error'])
+        # {name} text placeholders count as use
+        self.assertEqual(self.save('legacy', sql="SELECT '{id}'", query_parameters={'id': 'int'}).status_code, 200)
+
+    def test_defaults_and_optional_parameters_apply(self):
+        self.save_rules()
+        rows = self.client.get('/q/rules?page_size=3').get_json()
+        self.assertEqual([r['actor_id'] for r in rows], [1, 2, 3])          # min_id defaulted to 1, q is NULL
+        rows = self.client.get('/q/rules?min_id=24').get_json()
+        self.assertEqual([r['actor_id'] for r in rows], [24, 25])
+        rows = self.client.get('/q/rules?q=Actor 2%').get_json()
+        self.assertEqual([r['name'] for r in rows][:2], ['Actor 2', 'Actor 20'])
+
+    def test_violations_return_400_with_a_field_by_field_explanation(self):
+        self.save_rules()
+        res = self.client.get('/q/rules?min_id=0&q=x')
+        self.assertEqual(res.status_code, 400)
+        body = res.get_json()
+        self.assertEqual(body['errors'], {'min_id': 'must be at least 1', 'q': 'must be at least 2 characters long'})
+        self.assertIn('Invalid parameters', body['error'])
+        self.assertEqual(self.client.get('/q/rules?min_id=26').status_code, 400)
+        self.assertEqual(self.client.get('/q/rules?min_id=abc').get_json()['errors'],
+                         {'min_id': 'must be an integer'})
+
+    def test_json_body_values_are_checked_too(self):
+        self.save_rules()
+        ok = self.client.post('/q/rules?page_size=2', json={'params': {'min_id': 24}})
+        self.assertEqual([r['actor_id'] for r in ok.get_json()], [24, 25])
+        bad = self.client.post('/q/rules', json={'params': {'min_id': 'x'}})
+        self.assertEqual(bad.status_code, 400)
+        self.assertEqual(bad.get_json()['errors'], {'min_id': 'must be an integer'})
+
+    def test_rejected_requests_are_not_recorded_as_runs(self):
+        # they never reached the database, and recording them would let callers flood the history
+        self.save_rules()
+        self.client.get('/q/rules?min_id=24')
+        for _ in range(3):
+            self.assertEqual(self.client.get('/q/rules?min_id=abc').status_code, 400)
+        with open(os.path.join(self.saved_dir, 'rules.json')) as f:
+            history = json.load(f)['1']['execution_history']
+        self.assertEqual([e['status'] for e in history], ['success'])
+
+    def test_undeclared_parameters_still_work_as_before(self):
+        self.save('plain', sql='SELECT :x AS x', connection_name='lite')
+        self.assertEqual(self.client.get('/q/plain?x=5').get_json(), [{'x': '5'}])
+
+
+class SavedQueryOpenApiTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.save('rules', sql=RULES_SQL, query_parameters=RULES, connection_name='lite',
+                  description='Actors from an id', tags=['demo', 'actors'])
+        self.save('plain', sql='SELECT :x AS x', description='Echo')
+        self.save('my query', sql='SELECT 1 AS one', connection_name='lite')
+
+    def spec(self, **headers):
+        return self.client.get('/openapi.json', headers=headers).get_json()
+
+    def parameters(self, spec, path, method='get'):
+        return {p['name']: p for p in spec['paths'][path][method]['parameters']}
+
+    def test_every_saved_query_gets_a_documented_endpoint_with_its_rules(self):
+        spec = self.spec()
+        self.assertEqual({'/q/rules', '/q/plain', '/q/my%20query'} <= set(spec['paths']), True)
+        operation = spec['paths']['/q/rules']['get']
+        self.assertEqual(operation['summary'], 'Actors from an id')
+        self.assertIn('demo, actors', operation['description'])
+        p = self.parameters(spec, '/q/rules')
+        self.assertEqual(p['min_id']['schema'], {'type': 'integer', 'minimum': 1, 'maximum': 25, 'default': 1})
+        self.assertFalse(p['min_id']['required'])
+        self.assertEqual(p['min_id']['description'], 'First actor id to include')
+        self.assertEqual(p['q']['schema'], {'type': 'string', 'minLength': 2})
+        self.assertFalse(p['q']['required'])
+
+    def test_connection_is_required_only_when_the_query_has_no_default(self):
+        spec = self.spec()
+        self.assertFalse(self.parameters(spec, '/q/rules')['connection_name']['required'])
+        self.assertEqual(self.parameters(spec, '/q/rules')['connection_name']['schema']['default'], 'lite')
+        self.assertTrue(self.parameters(spec, '/q/plain')['connection_name']['required'])
+
+    def test_undeclared_parameters_are_documented_as_required_text(self):
+        x = self.parameters(self.spec(), '/q/plain')['x']
+        self.assertEqual((x['required'], x['schema']), (True, {'type': 'string'}))
+
+    def test_post_operation_describes_the_json_body(self):
+        body = self.spec()['paths']['/q/rules']['post']['requestBody']['content']['application/json']['schema']
+        self.assertEqual(body['properties']['params']['properties']['min_id']['default'], 1)
+        self.assertNotIn('required', body['properties']['params'])  # nothing is required; OpenAPI forbids []
+        plain = self.spec()['paths']['/q/plain']['post']['requestBody']
+        self.assertEqual(plain['content']['application/json']['schema']['properties']['params']['required'], ['x'])
+
+    def test_generic_documentation_is_still_there_and_operation_ids_are_unique(self):
+        spec = self.spec()
+        self.assertIn('/execute_sql', spec['paths'])
+        self.assertIn('/q/{name}', spec['paths'])
+        ids = [op['operationId'] for item in spec['paths'].values() for op in item.values()
+               if isinstance(op, dict) and 'operationId' in op]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_the_sql_text_is_never_published(self):
+        text = json.dumps(self.spec())
+        for fragment in ('SELECT', 'FROM actor', 'LIKE :q', 'WHERE'):
+            self.assertNotIn(fragment, text)
+
+    def test_an_api_key_hides_the_saved_query_section_from_anonymous_readers(self):
+        os.environ['SQL2API_API_KEY'] = 'k3y'
+        anonymous = self.spec()
+        self.assertIn('/execute_sql', anonymous['paths'])                       # generic API stays public
+        self.assertFalse([p for p in anonymous['paths'] if p in ('/q/rules', '/q/plain', '/q/my%20query')])
+        self.assertNotIn('Actors from an id', json.dumps(anonymous))
+        wrong = self.spec(**{'X-API-Key': 'nope'})
+        self.assertNotIn('/q/rules', wrong['paths'])
+        self.assertIn('/q/rules', self.spec(**{'X-API-Key': 'k3y'})['paths'])
+
+    def test_unreadable_saved_files_do_not_break_the_document(self):
+        with open(os.path.join(self.saved_dir, 'junk.json'), 'w') as f:
+            f.write('{not json')
+        with open(os.path.join(self.saved_dir, 'odd.json'), 'w') as f:
+            json.dump({'1': {'sql_query': 12, 'query_parameters': 'weird'}}, f)
+        spec = self.spec()
+        self.assertIn('/q/rules', spec['paths'])
+        self.assertNotIn('/q/junk', spec['paths'])
+        self.assertNotIn('/q/odd', spec['paths'])
+
+    def test_no_saved_queries_yet(self):
+        for name in ('rules', 'plain', 'my query'):
+            self.client.delete(f'/saved_sql/{name}')
+        spec = self.spec()
+        self.assertEqual([p for p in spec['paths'] if p.startswith('/q/') and p != '/q/{name}'], [])
+
+    def test_the_document_is_valid_openapi(self):
+        try:
+            from openapi_spec_validator import validate
+        except ImportError:
+            self.skipTest('openapi-spec-validator is not installed (pip install -e ".[dev]")')
+        validate(self.spec())                                     # with saved queries
+        os.environ['SQL2API_API_KEY'] = 'k3y'
+        validate(self.spec())                                     # anonymous view of a keyed server
+        validate(self.spec(**{'X-API-Key': 'k3y'}))
+        for name in ('rules', 'plain', 'my query'):
+            self.client.delete(f'/saved_sql/{name}', headers={'X-API-Key': 'k3y'})
+        validate(self.spec())                                     # nothing saved yet
+
+    def test_docs_page_lets_you_supply_an_api_key(self):
+        page = self.client.get('/docs').get_data(as_text=True)
+        self.assertIn('X-API-Key', page)
+        self.assertIn('sessionStorage', page)
+
+
 class ParameterTests(ApiTestCase):
     def test_bound_parameters_accept_any_text_safely(self):
         nasty = "x'; DROP TABLE actor; --"
@@ -660,14 +830,6 @@ class ParameterTests(ApiTestCase):
                          ("SELECT * FROM t WHERE a = %(a)s AND b LIKE '50%%' AND c = %(a)s", {'a': 1}))
         # no parameters: statement is untouched so drivers do not apply % formatting to it
         self.assertEqual(sqltools.bind_parameters("SELECT '50%'", {}, 'format'), ("SELECT '50%'", None))
-
-    def test_declared_types_coerce_query_string_values(self):
-        declared = {'id': 'int', 'ratio': {'type': 'float'}, 'on': 'bool', 'name': 'str'}
-        self.assertEqual(sqltools.coerce_params(declared, {'id': '3', 'ratio': '0.5', 'on': 'yes', 'name': '007',
-                                                           'other': '9'}),
-                         {'id': 3, 'ratio': 0.5, 'on': True, 'name': '007', 'other': '9'})
-        with self.assertRaises(ApiError):
-            sqltools.coerce_params(declared, {'id': 'abc'})
 
 
 FOREVER = 'WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT count(*) FROM c'

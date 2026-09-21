@@ -8,8 +8,25 @@
             "example"
         ],
         "query_parameters": {
-            "rating": "str",
-            "max_length": "int"
+            "rating": {
+                "type": "str",
+                "enum": [
+                    "G",
+                    "PG",
+                    "PG-13",
+                    "R",
+                    "NC-17"
+                ],
+                "default": "PG",
+                "description": "MPAA rating"
+            },
+            "max_length": {
+                "type": "int",
+                "min": 1,
+                "max": 600,
+                "default": 120,
+                "description": "Longest film to include, in minutes"
+            }
         },
         "connection_name": "sakila-sqlite",
         "created_at": "2024-01-01 09:00:00",

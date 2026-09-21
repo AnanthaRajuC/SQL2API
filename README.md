@@ -33,6 +33,10 @@ film_id,title,rating,length
   (or `?version=1`). Each run is recorded in the query's execution history.
 - **Bound parameters** - write `WHERE id = :id` and the value is sent to the database separately from the SQL, so it
   cannot inject anything. Declare types (`{"id": "int"}`) and query-string values are converted for you.
+- **Parameter rules** - saved queries can declare defaults, optional parameters, allowed values, numeric ranges and
+  text patterns. Bad input is rejected with a field-by-field `400` before it reaches the database.
+- **A live catalogue of your endpoints** - `/docs` lists every saved query as its own endpoint with its parameters and
+  rules. The SQL itself is never shown, and with an API key set the list is hidden from anonymous readers.
 - **Pagination** - `?page=2&page_size=50`, with `X-Has-More` telling you whether another page exists.
 - **Connection pooling** - MySQL, PostgreSQL, ClickHouse and H2 connections are reused between requests instead of
   opened for each one (about 30x lower per-request overhead on MySQL and H2 against a local server; more over a network).
@@ -79,13 +83,18 @@ every supported database) and `saved_sql/`. Edit the file, set `"active": true`,
 curl -X PATCH http://127.0.0.1:5000/save_sql_to_file -H 'Content-Type: application/json' -d '{
   "filename": "actor_by_id",
   "sql_query": "SELECT * FROM actor WHERE actor_id = :id",
-  "query_parameters": {"id": "int"},
+  "query_parameters": {"id": {"type": "int", "min": 1, "max": 200, "description": "Actor id"}},
   "connection_name": "sakila-sqlite",
   "author": "me", "description": "Look up an actor"
 }'
 
 curl 'http://127.0.0.1:5000/q/actor_by_id?id=7&format=yaml'
+curl 'http://127.0.0.1:5000/q/actor_by_id?id=0'
+# {"error": "Invalid parameters: id must be at least 1", "errors": {"id": "must be at least 1"}}
 ~~~
+
+Rules: `type` (`int`, `float`, `str`, `bool`), `default`, `required`, `enum`, `min`/`max`, `min_length`/`max_length`,
+`pattern` and `description` - see [the API reference](documentation/API.md#parameter-rules).
 
 Saving again under the same name adds version 2; `DELETE /saved_sql/actor_by_id?version=1` removes one version.
 
