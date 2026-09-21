@@ -154,13 +154,36 @@ workers, the effective limit is multiplied by the number of workers.
 
 ## Docker
 
+Every release is published to GitHub Container Registry for `linux/amd64` and `linux/arm64`:
+
 ~~~bash
-docker build -t sql2api .                          # add --build-arg WITH_H2=true for H2 support
-docker run -p 5000:5000 -v "$PWD/data:/data" -e SQL2API_API_KEY=change-me sql2api
+docker run -p 5000:5000 -v "$PWD/data:/data" -e SQL2API_API_KEY=change-me ghcr.io/anantharajuc/sql2api:latest
 ~~~
 
-The container keeps `db_connections.json` and `saved_sql/` in `/data`. It runs gunicorn with a single worker
-(the files are protected by an in-process lock).
+| Tag | Contents |
+|-----|----------|
+| `X.Y.Z`, `latest` | SQL2API with the MySQL, PostgreSQL and ClickHouse drivers (SQLite is built in) |
+| `X.Y.Z-h2`, `latest-h2` | The same plus Java and the H2 driver |
+
+The container keeps `db_connections.json` and `saved_sql/` in `/data` (create a starter with
+`docker run --rm -v "$PWD/data:/data" ghcr.io/anantharajuc/sql2api sql2api init`). It runs as a non-root user under
+gunicorn with one worker (the files are protected by an in-process lock) and a health check on `/health`. Behind a
+reverse proxy or load balancer, set `SQL2API_TRUST_PROXY=1`. To build it yourself:
+`docker build -t sql2api .` (add `--build-arg WITH_H2=true` for H2).
+
+### Try it with one command
+
+[`docker-compose.yml`](docker-compose.yml) starts SQL2API in front of a PostgreSQL database seeded with sample films:
+
+~~~bash
+docker compose up --build
+curl -H 'X-API-Key: demo-key' 'http://127.0.0.1:5000/q/films_by_rating?rating=PG&max_length=90'
+~~~
+
+Open <http://127.0.0.1:5000/docs>, paste `demo-key` into the box at the top, and both saved queries appear as endpoints.
+The demo listens on localhost only, mounts its configuration read-only, and reads the database password from an
+environment variable (`${DEMO_DB_PASSWORD}` in [`demo/data/db_connections.json`](demo/data/db_connections.json)).
+Clean up with `docker compose down -v`.
 
 ## API overview
 

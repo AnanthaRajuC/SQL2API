@@ -1,0 +1,34 @@
+# One-command demo: SQL2API in front of a PostgreSQL database that is seeded with sample films.
+#
+#   docker compose up --build
+#   curl -H 'X-API-Key: demo-key' 'http://127.0.0.1:5000/q/films_by_rating?rating=PG&max_length=90'
+#
+# Interactive docs: http://127.0.0.1:5000/docs (paste the key `demo-key` into the box at the top).
+# Stop and clean up with:  docker compose down -v
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: demo
+    volumes:
+      - ./demo/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  sql2api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${SQL2API_PORT:-5000}:5000"   # only reachable from this machine
+    environment:
+      SQL2API_API_KEY: demo-key                   # change it - or drop this line to run without authentication
+      DEMO_DB_PASSWORD: demo                      # referenced from demo/data/db_connections.json as ${DEMO_DB_PASSWORD}
+      SQL2API_RATE_LIMIT: 120/minute
+    volumes:
+      # Read-only, so the repository files are never modified (saved-query run history is simply not recorded here).
+      - ./demo/data:/data:ro

@@ -1,0 +1,114 @@
+name: Publish Docker image
+
+# Builds the image (plain and H2 variants) and publishes it to GitHub Container Registry when a version tag is pushed.
+# To try the build without publishing anything, run it by hand: Actions -> Publish Docker image -> Run workflow
+# (on a branch it never pushes). Images: ghcr.io/<owner>/sql2api:<version>, :latest, :<version>-h2, :latest-h2.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      push:
+        description: "Also push the images (only takes effect when run on a tag)"
+        type: boolean
+        default: false
+
+jobs:
+  image:
+    name: Image${{ matrix.variant }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: ""
+            with_h2: "false"
+          - variant: "-h2"
+            with_h2: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # the release check needs history to see whether the tag is on main
+
+      - name: Check the tag before publishing
+        if: github.ref_type == 'tag'
+        run: python3 .github/scripts/check_release.py "$GITHUB_REF_NAME"
+
+      - name: Work out image names and tags
+        id: meta
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"   # registry names must be lower case
+          suffix="${{ matrix.variant }}"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+            tags="$image:${version}${suffix}"
+            case "$version" in *-*) ;; *) tags="$tags,$image:latest${suffix}" ;; esac  # pre-releases never become latest
+          else
+            version="dev"
+            tags="$image:dry-run${suffix}"
+          fi
+          push=false
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && { [ "$GITHUB_EVENT_NAME" = "push" ] || [ "${{ inputs.push }}" = "true" ]; }; then
+            push=true
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "push=$push" >> "$GITHUB_OUTPUT"
+          echo "Tags: $tags (push: $push)"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build for this machine (to test it)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: sql2api-smoke
+          build-args: WITH_H2=${{ matrix.with_h2 }}
+          cache-from: type=gha,scope=image${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=image${{ matrix.variant }}
+
+      - name: Smoke test the image
+        run: |
+          docker run -d --name smoke -p 5000:5000 sql2api-smoke
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' smoke)" = "healthy" ] && break
+            sleep 2
+          done
+          docker logs smoke
+          test "$(docker inspect -f '{{.State.Health.Status}}' smoke)" = "healthy"
+          health="$(curl -fs localhost:5000/health)"
+          echo "$health"
+          if [ "${{ steps.meta.outputs.version }}" != "dev" ]; then
+            echo "$health" | grep -q "\"version\":\"${{ steps.meta.outputs.version }}\"" \
+              || { echo "::error::The image reports a different version than the tag"; exit 1; }
+          fi
+          if [ "${{ matrix.with_h2 }}" = "true" ]; then
+            docker exec smoke python -c "import jaydebeapi, jpype" && docker exec smoke java -version
+          fi
+
+      - name: Log in to GitHub Container Registry
+        if: steps.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build for amd64 and arm64${{ steps.meta.outputs.push == 'true' && ' and push' || ' (not pushing)' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: WITH_H2=${{ matrix.with_h2 }}
+          labels: |
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=image${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=image${{ matrix.variant }}

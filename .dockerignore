@@ -4,6 +4,10 @@
 **/__pycache__
 tests
 examples
+demo
+documentation
 db_connections.json
 saved_sql
 dist
+build
+*.egg-info

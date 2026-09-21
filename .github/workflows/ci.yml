@@ -86,6 +86,27 @@ jobs:
       - name: Wheel contains the bundled H2 driver
         run: unzip -l dist/*.whl | grep h2-2.2.224.jar
 
+  demo:
+    name: Compose demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Start the demo (SQL2API and a seeded PostgreSQL)
+        run: docker compose up -d --build --wait
+      - name: The demo behaves as documented
+        run: |
+          set -e
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:5000/connections)" = "401"
+          curl -fs -H 'X-API-Key: demo-key' 'localhost:5000/q/films_by_rating?rating=G&max_length=60' | grep -q 'ACE GOLDFINGER'
+          curl -s -H 'X-API-Key: demo-key' 'localhost:5000/q/films_by_rating?rating=XX' | grep -q 'must be one of'
+          curl -fs -H 'X-API-Key: demo-key' localhost:5000/openapi.json | grep -q '/q/film_by_id'
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Clean up
+        if: always()
+        run: docker compose down -v
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest
