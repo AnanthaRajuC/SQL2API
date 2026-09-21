@@ -10,7 +10,7 @@ name adds the next version; the latest version runs unless one is requested.
 | `author` | string | Who saved it | `"anantha"` |
 | `description` | string | What it is for | `"Look up an actor"` |
 | `tags` | string or array | Labels | `["example"]` |
-| `query_parameters` | object | Declared parameter types (`int`, `float`, `str`, `bool`) | `{"id": "int"}` |
+| `query_parameters` | object | Parameter definitions: a type, or an object of rules (`type`, `required`, `default`, `enum`, `min`, `max`, `min_length`, `max_length`, `pattern`, `description`) - see [Parameter rules](API.md#parameter-rules) | `{"id": {"type": "int", "min": 1}}` |
 | `connection_name` | string | Optional default connection for `/q/<name>` | `"sakila-sqlite"` |
 | `created_at`, `last_modified_at` | string | Timestamps | `"2024-03-23 23:50:57"` |
 | `status` | string | Query state | `"active"` |

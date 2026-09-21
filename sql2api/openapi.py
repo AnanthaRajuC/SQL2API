@@ -1,5 +1,9 @@
 """OpenAPI description of the API, served at /openapi.json and rendered at /docs."""
+import re
+from urllib.parse import quote
+
 from . import config
+from .params import json_schema
 
 _FORMAT_PARAM = {'name': 'format', 'in': 'query', 'schema': {
     'type': 'string', 'enum': ['json', 'ndjson', 'csv', 'tsv', 'xml', 'yaml', 'xlsx'], 'default': 'json'}}
@@ -7,7 +11,7 @@ _PAGE_PARAMS = [
     {'name': 'page', 'in': 'query', 'schema': {'type': 'integer', 'minimum': 1, 'default': 1}},
     {'name': 'page_size', 'in': 'query', 'schema': {'type': 'integer', 'minimum': 1, 'default': 10},
      'description': 'Upper limit is SQL2API_MAX_PAGE_SIZE (default 1000).'},
-    {'name': 'timeout', 'in': 'query', 'schema': {'type': 'number', 'exclusiveMinimum': 0},
+    {'name': 'timeout', 'in': 'query', 'schema': {'type': 'number', 'minimum': 0, 'exclusiveMinimum': True},
      'description': 'Seconds the query may run before it is cancelled (504). Can lower, never raise, the server '
                     'limit SQL2API_QUERY_TIMEOUT (default 30; 0 disables the server limit).'},
 ]
@@ -18,9 +22,16 @@ _ROWS = {'description': 'The requested page. Header X-Has-More says whether anot
 _ERRORS = {c: {'$ref': '#/components/responses/Error'} for c in ('400', '401', '403', '404', '500', '504')}
 
 
+def _object_schema(properties, required=()):
+    """An object schema; OpenAPI 3.0 forbids an empty ``required`` list, so it is only included when non-empty."""
+    schema = {'type': 'object', 'properties': properties}
+    if required:
+        schema['required'] = list(required)
+    return schema
+
+
 def _body(properties, required):
-    return {'required': True, 'content': {'application/json': {'schema': {
-        'type': 'object', 'required': required, 'properties': properties}}}}
+    return {'required': True, 'content': {'application/json': {'schema': _object_schema(properties, required)}}}
 
 
 _EXEC_PROPS = {
@@ -32,10 +43,58 @@ _EXEC_PROPS = {
 }
 
 
-def build_spec(version):
+def _saved_query_paths(queries):
+    """One documented endpoint per saved query, with its declared parameters and rules."""
+    paths, seen = {}, set()
+    for query in queries:
+        name = query['name']
+        has_default_connection = bool(query.get('connection_name'))
+        properties, required, query_params = {}, [], []
+        for param, spec in query['parameters'].items():
+            schema = json_schema(spec)
+            entry = {'name': param, 'in': 'query', 'required': spec['required'], 'schema': schema}
+            if spec['description']:
+                entry['description'] = spec['description']
+            query_params.append(entry)
+            properties[param] = {**schema, **({'description': spec['description']} if spec['description'] else {})}
+            if spec['required']:
+                required.append(param)
+        connection = {'name': 'connection_name', 'in': 'query', 'required': not has_default_connection,
+                      'schema': {'type': 'string', **({'default': query['connection_name']}
+                                                      if has_default_connection else {})}}
+        common = [connection, {'name': 'version', 'in': 'query', 'schema': {'type': 'integer'},
+                               'description': f"Saved version to run (default: latest, currently {query['version']})."},
+                  _FORMAT_PARAM, *_PAGE_PARAMS]
+        summary = query.get('description') or f'Run the saved query {name}'
+        tags = query.get('tags')
+        detail = f"Runs version {query['version']} of the saved query '{name}'."
+        if tags:
+            detail += ' Tags: ' + (tags if isinstance(tags, str) else ', '.join(map(str, tags))) + '.'
+        operation_id = 'run_' + re.sub(r'\W', '_', name)
+        while operation_id in seen:
+            operation_id += '_'
+        seen.add(operation_id)
+        body_properties = {'params': _object_schema(properties, required),
+                           'connection_name': connection['schema'], 'version': {'type': 'integer'},
+                           'format': {'type': 'string'}, 'timeout': {'type': 'number'}}
+        paths['/q/' + quote(name, safe='')] = {
+            'get': {'summary': summary, 'description': detail, 'tags': ['Saved queries (live)'],
+                    'operationId': operation_id, 'parameters': [*query_params, *common],
+                    'responses': {'200': _ROWS, **_ERRORS}},
+            'post': {'summary': summary + ' (parameters in a JSON body)', 'description': detail,
+                     'tags': ['Saved queries (live)'], 'operationId': operation_id + '_post',
+                     'parameters': [_FORMAT_PARAM, *_PAGE_PARAMS],
+                     'requestBody': {'required': bool(required), 'content': {'application/json': {
+                         'schema': _object_schema(body_properties)}}},
+                     'responses': {'200': _ROWS, **_ERRORS}},
+        }
+    return paths
+
+
+def build_spec(version, saved_queries=None):
     saved = {'filepath': {'type': 'string', 'description': 'Saved query name or path inside saved_sql/.'},
              **_EXEC_PROPS}
-    return {
+    spec = {
         'openapi': '3.0.3',
         'info': {'title': 'SQL2API', 'version': version,
                  'description': 'Run SQL against configured databases and get the results back over HTTP.'},
@@ -119,12 +178,42 @@ def build_spec(version):
                                 'responses': {'200': {'description': 'OK'}}}},
         },
     }
+    if saved_queries:
+        spec['paths'].update(_saved_query_paths(saved_queries))
+        spec['tags'] = [{'name': 'Saved queries (live)',
+                         'description': 'One endpoint per saved query, generated from its latest version: its '
+                                        'declared parameters and their rules, and its default connection.'}]
+    return spec
 
 
 DOCS_HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><title>SQL2API docs</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css"></head>
-<body><div id="ui"></div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  #key-bar { padding: 8px 16px; background: #f4f4f4; border-bottom: 1px solid #ddd; font-size: 14px; }
+  #key-bar input { width: 260px; padding: 4px; }
+</style></head>
+<body>
+<div id="key-bar">
+  API key (only needed if the server sets SQL2API_API_KEY; it reveals your saved queries below and is
+  sent with "Try it out" requests; kept for this browser tab only):
+  <input id="key" type="password" autocomplete="off" placeholder="X-API-Key">
+  <button id="save-key">Apply</button>
+</div>
+<div id="ui"></div>
 <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-<script>SwaggerUIBundle({url: 'openapi.json', dom_id: '#ui'});</script></body></html>
+<script>
+  var stored = '';
+  try { stored = sessionStorage.getItem('sql2api-key') || ''; } catch (e) {}
+  document.getElementById('key').value = stored;
+  document.getElementById('save-key').onclick = function () {
+    try { sessionStorage.setItem('sql2api-key', document.getElementById('key').value); } catch (e) {}
+    location.reload();
+  };
+  SwaggerUIBundle({
+    url: 'openapi.json', dom_id: '#ui',
+    requestInterceptor: function (req) { if (stored) { req.headers['X-API-Key'] = stored; } return req; }
+  });
+</script></body></html>
 """

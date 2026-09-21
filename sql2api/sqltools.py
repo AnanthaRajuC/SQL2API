@@ -51,37 +51,6 @@ def paginate(sql, limit, offset):
 # Parameters
 # --------------------------------------------------------------------------------------
 
-def _to_bool(text):
-    lowered = text.strip().lower()
-    if lowered in ('true', '1', 'yes'):
-        return True
-    if lowered in ('false', '0', 'no'):
-        return False
-    raise ValueError(text)
-
-
-_COERCERS = {'int': int, 'integer': int, 'float': float, 'number': float, 'str': str, 'string': str,
-             'bool': _to_bool, 'boolean': _to_bool}
-
-
-def coerce_params(declared, params):
-    """Convert string values (e.g. from a query string) to the types a saved query declares.
-
-    ``declared`` is the saved version's ``query_parameters``: ``{"actor_id": "int"}`` or
-    ``{"actor_id": {"type": "int"}}``. Undeclared parameters are left untouched.
-    """
-    result = dict(params)
-    for name, spec in (declared or {}).items():
-        type_name = spec.get('type') if isinstance(spec, dict) else spec
-        coerce = _COERCERS.get(str(type_name).lower())
-        if coerce and isinstance(result.get(name), str):
-            try:
-                result[name] = coerce(result[name])
-            except ValueError:
-                raise ApiError(f"Parameter '{name}' must be of type {type_name}") from None
-    return result
-
-
 def _check_value(name, value):
     if value is None or isinstance(value, (bool, str)):
         return
@@ -123,6 +92,11 @@ def fill_placeholders(sql, values):
 def named_parameters(sql):
     """Names of the ``:name`` bound parameters used by ``sql``, in order of appearance."""
     return [m.group('name') for m in _PARAM_RE.finditer(sql) if m.group('name')]
+
+
+def placeholder_names(sql):
+    """Every parameter name ``sql`` uses - bound ``:name`` first, then ``{name}`` text placeholders - once each."""
+    return list(dict.fromkeys(named_parameters(sql) + _BRACE_RE.findall(sql)))
 
 
 _MARKERS = {'qmark': lambda name: '?', 'format': lambda name: '%s', 'pyformat': lambda name: f'%({name})s'}

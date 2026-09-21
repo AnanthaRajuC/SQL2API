@@ -69,7 +69,7 @@ Any trailing `LIMIT`/`OFFSET` in the SQL is replaced by the requested page. Resp
 ~~~
 
 - `filename` may contain letters, digits, spaces, `.`, `_` and `-`. Saving to an existing name creates the next version.
-- `query_parameters` declares parameter types (`int`, `float`, `str`, `bool`) used to convert query-string values.
+- `query_parameters` declares the query's parameters and their [rules](#parameter-rules). The definitions are checked when you save (400 with an `errors` map if any is invalid), and every parameter declared must be used in `sql_query`.
 - `connection_name` (optional) is the default connection when a run does not name one.
 - Response: `{"message": "...", "filename": "actor_by_id", "uuid": "...", "version": 2}`.
 
@@ -102,6 +102,42 @@ with the query named in the body:
 
 `filepath` may be a bare name (`actor_by_id`), a path relative to the data folder, or an absolute path - but it must
 resolve to a `.json` file inside `saved_sql/`.
+
+## Parameter rules
+
+`query_parameters` maps each parameter name to its type, or to an object of rules:
+
+~~~json
+{
+    "rating":     {"type": "str", "enum": ["G", "PG", "R"], "default": "PG", "description": "MPAA rating"},
+    "max_length": {"type": "int", "min": 1, "max": 600, "default": 120},
+    "title":      {"type": "str", "required": false, "min_length": 2, "pattern": "[A-Za-z ]+"},
+    "id":         "int"
+}
+~~~
+
+| Rule | Applies to | Meaning |
+|------|-----------|---------|
+| `type` | any | `int`, `float`, `str` or `bool` (aliases `integer`, `number`, `string`, `boolean`). Query-string text is converted; JSON values must already have the right type. Untyped parameters accept any single value. |
+| `required` | any | Defaults to `true`, or to `false` when a `default` is given. An optional parameter with no value and no default is bound as `NULL`, so `(:title IS NULL OR title LIKE :title)` works. |
+| `default` | any | Used when the request supplies nothing. It must itself satisfy the other rules. Cannot be combined with `"required": true`. |
+| `enum` | any | The value must be one of these. |
+| `min`, `max` | numbers | Inclusive bounds. |
+| `min_length`, `max_length` | text | Length bounds. |
+| `pattern` | text | A regular expression the whole value must match (at most 500 characters). |
+| `description` | any | Shown in `/docs`. |
+
+Requests that break a rule are rejected with **400** before anything reaches the database, with every problem listed:
+
+~~~json
+{
+    "error": "Invalid parameters: rating must be one of: G, PG, R; max_length must be at most 600",
+    "errors": {"rating": "must be one of: G, PG, R", "max_length": "must be at most 600"}
+}
+~~~
+
+Parameters used in the SQL but not declared still work: they are required and passed through as supplied.
+Requests rejected this way are not recorded in the query's `execution_history`.
 
 ### Text placeholders (legacy)
 
@@ -151,13 +187,23 @@ its stored password.
 `DELETE /connections/reporting` removes one. See [DATABASE_CONNECTION_CONFIGURATION.md](DATABASE_CONNECTION_CONFIGURATION.md)
 for the connection fields.
 
+## Interactive documentation
+
+`/docs` (Swagger UI, backed by `/openapi.json`) documents the generic API and also lists **every saved query as its own
+endpoint**, generated from its latest version: its parameters with types, defaults, ranges and descriptions, and
+whether a connection must be named. The SQL text is never included.
+
+The generic part is public. When the server sets `SQL2API_API_KEY`, the saved-query part is only included for
+requests that carry the key - paste it into the box at the top of `/docs` (kept in that browser tab only) or send
+`X-API-Key` to `/openapi.json`.
+
 ## Errors
 
 Errors are returned as `{"error": "..."}`; failed queries also include `"detail"` with the database's message.
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Missing or invalid input (SQL, paging, format, filename, parameters, several statements) |
+| 400 | Missing or invalid input (SQL, paging, format, filename, parameters, several statements). Parameter-rule violations add an `errors` map keyed by parameter name. |
 | 401 | Missing or wrong `X-API-Key` (only when `SQL2API_API_KEY` is set) |
 | 403 | Inactive connection, write statement while writes are disabled, or a file outside `saved_sql/` |
 | 404 | Unknown connection, saved query, version or file |

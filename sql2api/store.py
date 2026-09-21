@@ -226,6 +226,24 @@ def record_execution(path, version, entry):
         pass
 
 
+def latest_versions():
+    """(name, version number, data) for the newest version of every saved query; unreadable files are skipped."""
+    saved_dir = str(config.saved_sql_dir())
+    if not os.path.isdir(saved_dir):
+        return []
+    found = []
+    for filename in sorted(os.listdir(saved_dir)):
+        path = os.path.join(saved_dir, filename)
+        if not (filename.endswith('.json') and os.path.isfile(path)):
+            continue
+        try:
+            number, data = select_version(load_versions(path))
+        except ApiError:
+            continue
+        found.append((filename[:-5], number, data))
+    return found
+
+
 def list_saved():
     """Return every saved query with its versions' metadata (SQL text is not included)."""
     saved_dir = str(config.saved_sql_dir())
