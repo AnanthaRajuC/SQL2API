@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-21
+
 ### Added
 - Docker images are published to GitHub Container Registry on every release (`ghcr.io/anantharajuc/sql2api`, tags
   `X.Y.Z` and `latest`, plus `-h2` variants with Java and the H2 driver), for `linux/amd64` and `linux/arm64`. The
@@ -92,6 +94,7 @@ First public release, restructured from the original single-file application.
 - JSON column order is preserved; Decimal, date and driver-specific number types serialise correctly.
 - Concurrent saves can no longer lose a version.
 
-[Unreleased]: https://github.com/AnanthaRajuC/SQL2API/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/AnanthaRajuC/SQL2API/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/AnanthaRajuC/SQL2API/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AnanthaRajuC/SQL2API/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AnanthaRajuC/SQL2API/releases/tag/v0.1.0
