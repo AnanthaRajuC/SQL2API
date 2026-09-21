@@ -1,169 +1,167 @@
-<!--
-*** Thanks for checking out Spring Boot Application Template. If you have a suggestion
-*** that would make this better, please fork the repo and create a pull request
-*** or simply open an issue with the tag "enhancement".
-*** Thanks again!
--->
 # SQL2API
 
-SQL2API is a middleware solution that bridges the gap between SQL databases and REST APIs. The system accepts SQL queries through HTTP endpoints and executes them against configured database connections, returning results in multiple formats including JSON, XML, YAML, CSV, TSV, and XLSX.
+[![CI](https://github.com/AnanthaRajuC/SQL2API/actions/workflows/ci.yml/badge.svg)](https://github.com/AnanthaRajuC/SQL2API/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 
-| Database      | JSON | XML | YAML| CSV |  TSV | XLSX |
-|---------------|------|-----|-----|-----|------|------|
-| MySQL         | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
-| Postgres      | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
-| ClickHouse    | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
-| H2            | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
-| SQLite        | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
-
-## Quick start
+**Turn SQL into a REST API.** SQL2API is a small Flask service that runs SQL against your databases and returns the
+results as JSON, NDJSON, CSV, TSV, XML, YAML or Excel. Save a query once and it becomes an endpoint with typed,
+injection-safe parameters, versioning and run history.
 
 ~~~bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cd code
-python SQL2API.py            # http://127.0.0.1:5000
+$ curl 'http://127.0.0.1:5000/q/actor_by_id?id=7'
+[{"actor_id": 7, "first_name": "GRACE", "last_name": "MOSTEL"}]
+
+$ curl 'http://127.0.0.1:5000/q/films_by_rating?rating=PG&max_length=60&format=csv&page_size=2'
+film_id,title,rating,length
+410,HEAVEN FREEDOM,PG,48
+443,HURRICANE AFFAIR,PG,49
 ~~~
 
-~~~bash
-curl -X POST 'http://localhost:5000/execute_sql?format=csv&page=1&page_size=5' \
-     -H 'Content-Type: application/json' \
-     -d '{"sql": "SELECT * FROM actor", "connection_name": "localhost-sqlite"}'
-~~~
-
-Run the tests from the `code` folder with `python -m unittest discover -s tests -t .`.
+| Database   | JSON | NDJSON | XML | YAML | CSV | TSV | XLSX |
+|------------|:----:|:------:|:---:|:----:|:---:|:---:|:----:|
+| MySQL      | ✅   | ✅     | ✅  | ✅   | ✅  | ✅  | ✅   |
+| PostgreSQL | ✅   | ✅     | ✅  | ✅   | ✅  | ✅  | ✅   |
+| ClickHouse | ✅   | ✅     | ✅  | ✅   | ✅  | ✅  | ✅   |
+| SQLite     | ✅   | ✅     | ✅  | ✅   | ✅  | ✅  | ✅   |
+| H2         | ✅   | ✅     | ✅  | ✅   | ✅  | ✅  | ✅   |
 
 ## Features
 
-**Executing SQL Queries:** POST the SQL and a connection name to `/execute_sql`. Results are paginated (`page`, `page_size`) and returned in the format given by `format` (json, csv, tsv, xml, yaml, xlsx).
+- **Ad-hoc queries** - `POST /execute_sql` with SQL and a connection name.
+- **Saved, versioned queries** - every save creates a new version; `GET /q/<name>?id=7` runs the latest one
+  (or `?version=1`). Each run is recorded in the query's execution history.
+- **Bound parameters** - write `WHERE id = :id` and the value is sent to the database separately from the SQL, so it
+  cannot inject anything. Declare types (`{"id": "int"}`) and query-string values are converted for you.
+- **Pagination** - `?page=2&page_size=50`, with `X-Has-More` telling you whether another page exists.
+- **Read-only by default** - only single `SELECT`/`WITH`/`SHOW`/`DESCRIBE`/`EXPLAIN` statements run, and sessions are
+  opened read-only where the database supports it.
+- **Secrets stay out of files** - `"password": "${PG_PASSWORD}"` in `db_connections.json` reads the environment.
+- **Self-documenting** - OpenAPI at `/openapi.json`, Swagger UI at `/docs`.
 
-**Query Parameterization:** Saved queries can contain `{placeholders}`. Values are supplied in the request body when executing via `/execute_sql_with_parameters_from_file`; they must be numbers, booleans or plain text, so they cannot break out of the query.
+## Install
 
-**Saving and Versioning Queries:** PATCH `/save_sql_to_file` stores a query with metadata (author, description, tags). Saving under an existing filename adds a new version; executing a saved query always runs the latest version.
+~~~bash
+pip install "sql2api[postgres]"         # pick the drivers you need: mysql, postgres, clickhouse, h2
+# or everything:                        pip install "sql2api[all]"
+~~~
 
-**Listing Saved Queries:** GET `/list_files` returns every saved query with its versions and metadata, and can be sorted with `sort_by` and `sort_order`.
+SQLite needs no extra driver. H2 also needs a Java runtime (the H2 JDBC jar is bundled).
+From a clone: `pip install -e ".[dev]"`. Or use Docker - see [below](#docker).
 
-**Connection Management:** GET `/connections` lists the configured connections (passwords are masked) and PATCH `/connections` adds or updates them.
+## Quick start
 
-## Safe by default
+The repository ships two sample SQLite databases and a couple of saved queries:
 
-SQL2API runs whatever SQL it is given, so it ships locked down. All of this is configured with environment variables:
+~~~bash
+cd examples
+cp db_connections.example.json db_connections.json
+sql2api serve                            # http://127.0.0.1:5000
+~~~
+
+~~~bash
+curl -X POST 'http://127.0.0.1:5000/execute_sql?page_size=3' -H 'Content-Type: application/json' \
+     -d '{"sql": "SELECT * FROM actor WHERE actor_id > :min", "params": {"min": 10}, "connection_name": "sakila-sqlite"}'
+~~~
+
+Open <http://127.0.0.1:5000/docs> for the interactive API reference.
+
+For your own databases, run `sql2api init` in an empty folder: it creates `db_connections.json` (inactive templates for
+every supported database) and `saved_sql/`. Edit the file, set `"active": true`, and start the server there.
+
+## Saving a query as an endpoint
+
+~~~bash
+curl -X PATCH http://127.0.0.1:5000/save_sql_to_file -H 'Content-Type: application/json' -d '{
+  "filename": "actor_by_id",
+  "sql_query": "SELECT * FROM actor WHERE actor_id = :id",
+  "query_parameters": {"id": "int"},
+  "connection_name": "sakila-sqlite",
+  "author": "me", "description": "Look up an actor"
+}'
+
+curl 'http://127.0.0.1:5000/q/actor_by_id?id=7&format=yaml'
+~~~
+
+Saving again under the same name adds version 2; `DELETE /saved_sql/actor_by_id?version=1` removes one version.
+
+## Configuration
+
+Everything is configured through environment variables (all optional):
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `SQL2API_ALLOW_WRITES` | off | Only single, read-only statements (`SELECT`, `WITH`, `SHOW`, `DESCRIBE`, `EXPLAIN`) are accepted. Set to `1` to allow `INSERT`/`UPDATE`/DDL. |
-| `SQL2API_API_KEY` | unset | When set, every request must carry a matching `X-API-Key` header. |
+| `SQL2API_HOME` | current directory | Folder holding `db_connections.json` and `saved_sql/`. |
+| `SQL2API_ALLOW_WRITES` | off | Allow `INSERT`/`UPDATE`/DDL. Otherwise only single read-only statements are accepted. |
+| `SQL2API_API_KEY` | unset | When set, every request (except `/health` and `/docs`) needs a matching `X-API-Key` header. |
 | `SQL2API_MAX_PAGE_SIZE` | `1000` | Upper limit for `page_size`. |
-| `SQL2API_HOST` / `SQL2API_PORT` | `127.0.0.1` / `5000` | Address the server binds to. |
-| `SQL2API_DEBUG` | off | Flask debug mode. Never enable on a network-reachable host. |
+| `SQL2API_HOST` / `SQL2API_PORT` | `127.0.0.1` / `5000` | Bind address for `sql2api serve`. |
+| `SQL2API_DEBUG` | off | Flask debug mode. Never enable on a reachable host. |
+| `SQL2API_H2_JAR` | bundled | Path to a different H2 JDBC jar. |
 
-Saved-query files can only be read from the `code/saved_sql` folder, and passwords in `db_connections.json` are never returned by the API. Even so, do not expose the service to untrusted networks without an API key and a reverse proxy in front of it.
+## Security
 
----  
+SQL2API runs whatever SQL it is given against your databases, so it ships locked down and expects you to finish the job:
 
-<div align="center">
+- Set `SQL2API_API_KEY` and serve over TLS (put it behind a reverse proxy).
+- Connect with a database account that only has the privileges the API needs - the read-only guard is
+  defence in depth, not a replacement for grants. (H2's driver cannot enforce read-only, so H2 relies on the guard.)
+- Use bound `:name` parameters. The older `{name}` placeholders paste text into the SQL and are therefore restricted
+  to numbers and plain text.
+- Saved-query files are only read from `saved_sql/`; passwords are never returned by the API.
 
-[![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen?logo=github)](CODE_OF_CONDUCT.md) [![Tweet](https://img.shields.io/twitter/url/http/shields.io.svg?style=social)](https://twitter.com/intent/tweet?text=Checkout+this+sql+to+api+application&url=https://github.com/AnanthaRajuC/SQL2API&hashtags=Python) [![Twitter Follow](https://img.shields.io/twitter/follow/anantharajuc?label=follow%20me&style=social)](https://twitter.com/anantharajuc)
-</div>
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
-<div align="center">
-  <sub>Built with ❤︎ by <a href="https://twitter.com/anantharajuc">Anantha Raju C</a> and <a href="https://github.com/AnanthaRajuC/SQL2API/graphs/contributors">contributors</a>
-</div>
+## Docker
 
-</br>
+~~~bash
+docker build -t sql2api .                          # add --build-arg WITH_H2=true for H2 support
+docker run -p 5000:5000 -v "$PWD/data:/data" -e SQL2API_API_KEY=change-me sql2api
+~~~
 
-<p align="center">
-	<a href="https://github.com/AnanthaRajuC/SQL2API/blob/master/README.md#spring-boot-application-templatestarter-project-"><strong>Explore the docs »</strong></a>
-	<br />
-	<br />
-	<a href="https://github.com/AnanthaRajuC/SQL2API/issues">Report Bug</a>
-	·
-	<a href="https://github.com/AnanthaRajuC/SQL2API/issues">Request Feature</a>
-</p>
+The container keeps `db_connections.json` and `saved_sql/` in `/data`. It runs gunicorn with a single worker
+(the files are protected by an in-process lock).
 
-<!-- PROJECT SHIELDS -->
-<!--
-*** I'm using markdown "reference style" links for readability.
-*** Reference links are enclosed in brackets [ ] instead of parentheses ( ).
--->
+## API overview
 
-|     Service     | Badge | Badge | Badge | Badge | Badge |
-|-----------------|-------|-------|-------|-------|-------|
-|  **GitHub**     |[![GitHub last commit](https://img.shields.io/github/last-commit/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/commits/master)|[![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/pulls)|[![GitHub issues](https://img.shields.io/github/issues/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/issues)|[![GitHub forks](https://img.shields.io/github/forks/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/network)|[![GitHub stars](https://img.shields.io/github/stars/AnanthaRajuC/SQL2API)](https://github.com/AnanthaRajuC/SQL2API/stargazers)|
-|  **GitHub**     |![GitHub repo size](https://img.shields.io/github/repo-size/AnanthaRajuC/SQL2API)|![GitHub top language](https://img.shields.io/github/languages/top/AnanthaRajuC/SQL2API.svg)|![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/AnanthaRajuC/SQL2API)|![GitHub tag (latest SemVer)](https://img.shields.io/github/tag/AnanthaRajuC/SQL2API.svg)|![GitHub language count](https://img.shields.io/github/languages/count/AnanthaRajuC/SQL2API)|
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/execute_sql` | POST | Run ad-hoc SQL (`sql`, `connection_name`, optional `params`). |
+| `/q/<name>` | GET, POST | Run a saved query; query-string or body values become parameters. |
+| `/save_sql_to_file` | PATCH | Save a query (creates the next version). |
+| `/list_files` | GET | List saved queries and their versions (`sort_by`, `sort_order`). |
+| `/saved_sql/<name>` | DELETE | Delete a saved query or one `?version=`. |
+| `/view_file_content` | GET | Raw content of a saved query file. |
+| `/execute_sql_from_file`, `/execute_sql_with_parameters_from_file` | POST | Run a saved query by `filepath` (same as `/q/<name>`). |
+| `/connections` | GET, PATCH | List (passwords masked) / add / update connections. |
+| `/connections/<name>` | DELETE | Remove a connection. |
+| `/health`, `/docs`, `/openapi.json` | GET | Liveness, Swagger UI, OpenAPI spec. |
 
+Full details are in [documentation/API.md](documentation/API.md).
 
-## Reporting Issues/Suggest Improvements
+## Development
 
-This Project uses GitHub's integrated issue tracking system to record bugs and feature requests. If you want to raise an issue, please follow the recommendations below:
+~~~bash
+pip install -e ".[dev]"
+ruff check .
+python -m unittest discover -s tests -t .
+~~~
 
-* 	Before you log a bug, please [search the issue tracker](https://github.com/AnanthaRajuC/SQL2API/search?type=Issues) to see if someone has already reported the problem.
-* 	If the issue doesn't already exist, [create a new issue](https://github.com/AnanthaRajuC/SQL2API/issues/new)
-* 	Please provide as much information as possible with the issue report.
-* 	If you need to paste code, or include a stack trace use Markdown +++```+++ escapes before and after your text.
+The integration tests in `tests/test_integration.py` run against real MySQL, PostgreSQL, ClickHouse and H2 servers when
+the matching `SQL2API_IT_*` variables are set, and are skipped otherwise; CI runs them against service containers.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the pull request process, and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
-<!-- CONTRIBUTING -->
-## Contributing
+## Third-party components
 
-Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+The wheel bundles the [H2 Database](https://h2database.com) JDBC driver (MPL 2.0 / EPL 1.0). The sample SQLite
+databases in `examples/` derive from the Sakila and Chinook sample datasets.
 
-Kindly refer to [CONTRIBUTING.md](/CONTRIBUTING.md) for important **Pull Request Process** details
+## License
 
-1. In the top-right corner of this page, click **Fork**.
+[MIT](LICENSE) © Anantha Raju C
 
-2. Clone a copy of your fork on your local, replacing *YOUR-USERNAME* with your Github username.
-
-   `git clone https://github.com/YOUR-USERNAME/SQL2API.git`
-
-3. **Create a branch**: 
-
-   `git checkout -b <my-new-feature-or-fix>`
-
-4. **Make necessary changes and commit those changes**:
-
-   `git add .`
-
-   `git commit -m "new feature or fix"`
-
-5. **Push changes**, replacing `<add-your-branch-name>` with the name of the branch you created earlier at step #3. :
-
-   `git push origin <add-your-branch-name>`
-
-6. Submit your changes for review. Go to your repository on GitHub, you'll see a **Compare & pull request** button. Click on that button. Now submit the pull request.
-
-That's it! Soon I'll be merging your changes into the master branch of this project. You will get a notification email once the changes have been merged. Thank you for your contribution.
-
-Kindly follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) to create an explicit commit history. Kindly prefix the commit message with one of the following type's.
-
-**build**   : Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)  
-**ci**      : Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)  
-**docs**    : Documentation only changes  
-**feat**    : A new feature  
-**fix**     : A bug fix  
-**perf**    : A code change that improves performance  
-**refactor**: A code change that neither fixes a bug nor adds a feature  
-**style**   : Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)  
-**test**    : Adding missing tests or correcting existing tests  
-
-## The End
-
-In the end, I hope you enjoyed the application and find it useful, as I did when I was developing it.
-
-If you would like to enhance, please: 
-
-* 	**Open PRs**, 
-* 	Give **feedback**, 
-* 	Add **new suggestions**, and
-*	Finally, give it a 🌟.
-
-* Happy Coding ...* 🙂
-
-<!-- CONTACT -->
 ## Contact
 
 Anantha Raju C - [@anantharajuc](https://twitter.com/anantharajuc) - arcswdev@gmail.com
 
-Project Link: [https://github.com/AnanthaRajuC/SQL2API](https://github.com/AnanthaRajuC/SQL2API)
-
-
-
+Project link: <https://github.com/AnanthaRajuC/SQL2API>

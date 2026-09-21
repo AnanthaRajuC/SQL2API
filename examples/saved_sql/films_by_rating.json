@@ -1,0 +1,21 @@
+{
+    "1": {
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "sql_query": "SELECT film_id, title, rating, length FROM film WHERE rating = :rating AND length <= :max_length ORDER BY title",
+        "author": "sql2api",
+        "description": "Films with a given rating up to a maximum length (minutes)",
+        "tags": [
+            "example"
+        ],
+        "query_parameters": {
+            "rating": "str",
+            "max_length": "int"
+        },
+        "connection_name": "sakila-sqlite",
+        "created_at": "2024-01-01 09:00:00",
+        "last_modified_at": "2024-01-01 09:00:00",
+        "status": "active",
+        "version": 1,
+        "execution_history": []
+    }
+}

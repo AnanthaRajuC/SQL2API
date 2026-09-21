@@ -1,58 +1,58 @@
-## Database Connection Configuration
+# Database connection configuration
 
-**Purpose and Scope**
+Connections live in `db_connections.json` inside the data folder (`SQL2API_HOME`, default: the current directory).
+Create a starter file with `sql2api init`, or copy [`examples/db_connections.example.json`](../examples/db_connections.example.json).
+The file is re-read on every request, so edits take effect without a restart, and it can also be managed through the
+[`/connections` API](API.md#connections).
 
-This document explains the database connection configuration system in SQL2API, specifically the structure and management of the `db_connections.json` file. This configuration file defines how the Flask application connects to various database systems and manages their connection parameters.
+## File structure
 
-## Configuration File Structure
+~~~json
+{
+    "connections": {
+        "reporting": {
+            "db": "postgres",
+            "host": "db.internal",
+            "port": 5432,
+            "database": "reports",
+            "user": "readonly",
+            "password": "${REPORTING_PASSWORD}",
+            "active": true
+        },
+        "local-file": {"db": "sqlite", "database": "sqlite-sakila.db", "active": true}
+    }
+}
+~~~
 
-The SQL2API system uses a centralized JSON configuration file to manage database connections. The configuration is stored in `code/db_connections.json` and follows a nested structure where each connection is identified by a unique key and contains database-specific parameters.
+## Supported types
 
-## Supported Database Types
+| `db` | Driver | Notes |
+|------|--------|-------|
+| `mysql` | `mysql-connector-python` | Sessions are opened `READ ONLY` unless writes are enabled |
+| `postgres` | `psycopg2` | Sessions are opened read-only unless writes are enabled |
+| `clickhouse` | `clickhouse-driver` (native protocol, port 9000) | `readonly=1` unless writes are enabled |
+| `sqlite` | `sqlite3` | Opened with `mode=ro` unless writes are enabled |
+| `h2` | `JayDeBeApi` + bundled JDBC jar | Connects to a running H2 TCP server: `jdbc:h2:tcp://<host>[:port]/~/<database>` |
 
-The SQL2API system supports five different database types, each with specific connection parameters and requirements. The following table summarizes the supported database types:
+## Properties
 
-| Database Type | Driver              | Purpose | 
-|----------------|----------------------|---------|
-| MySQL          | `mysql.connector`    | RDBMS   |
-| PostgreSQL     | `psycopg2`           | RDBMS   |
-| ClickHouse     | `clickhouse_driver`  | 	Analytical database        |
-| H2 Database    | `jaydebeapi`         |  In-memory/embedded database       |
-| SQLite         | `sqlite3`            |   File-based database      |
+| Property | Required | Description |
+|----------|----------|-------------|
+| `db` | yes | One of the types above |
+| `active` | yes | Only active connections can be used (otherwise 403) |
+| `database` | yes | Database name, or the file path for SQLite (relative paths resolve against the data folder) |
+| `host` | network databases | Server host |
+| `port` | no | Overrides the driver's default port |
+| `user`, `password` | usually | Credentials |
 
-## Connection Properties
+## Keeping secrets out of the file
 
-| Property  | Type     | Required | Description                      |
-|-----------|----------|----------|----------------------------------|
-| db        | string   | Yes      | Database type identifier         |
-| host      | string   | Yes*     | Database server hostname         |
-| user      | string   | Yes*     | Database username                |
-| password  | string   | Yes*     | Database password                |
-| database  | string   | Yes      | Database name or file path       |
-| port      | integer  | No       | Overrides the driver's default port |
-| active    | boolean  | Yes      | Connection availability flag     |
+Any string value may contain `${VAR}` references, replaced with the environment variable's value when the connection is
+used (a missing variable is reported as an error naming it). `GET /connections` masks plain-text passwords as
+`********` and shows `${VAR}` references as written.
 
-- **Not** required for SQLite connections which only need database (file path)
+## Best practice
 
-## Connection Status Management
-
-Each database connection includes an active boolean flag that determines whether the connection is available for use by the SQL2API system. This allows administrators to temporarily disable connections without removing their configuration.
-
-The Flask application uses the active flag to filter available connections when processing API requests. Inactive connections are ignored during connection establishment but remain in the configuration for future activation.
-
-## Configuration Best Practices
-
-When modifying the `db_connections.json` file, follow these guidelines:
-
-- **Unique Connection Keys**: Each connection must have a unique identifier within the `connections` object
-- **Required Parameters**: Network-based databases require `host`, `user`, `password`, and `database` parameters
-- **Database Type Mapping**: The `db` parameter must match one of the supported database types: `mysql`, `postgres`, `clickhouse`, `h2`, or `sqlite`
-- **Active Status**: Use the `active` flag to control connection availability without removing configuration
-- **File Paths**: For SQLite connections, use relative (resolved against the `code/` folder) or absolute file paths in the `database` parameter
-- **Passwords**: `GET /connections` never returns stored passwords (they appear as `********`); keep `db_connections.json` out of version control for real credentials
-
-
-
-
-
-
+- Use a database account with only the privileges the API needs. The read-only guard is defence in depth.
+- Keep `db_connections.json` out of version control (the repository's `.gitignore` already does).
+- Use `"active": false` to disable a connection without deleting it.

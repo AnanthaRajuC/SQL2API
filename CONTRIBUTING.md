@@ -90,3 +90,18 @@ available at [http://contributor-covenant.org/version/1/4][version]
 
 [homepage]: http://contributor-covenant.org
 [version]: http://contributor-covenant.org/version/1/4/
+
+## Development setup
+
+~~~bash
+git clone https://github.com/AnanthaRajuC/SQL2API.git && cd SQL2API
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+ruff check .
+python -m unittest discover -s tests -t .
+~~~
+
+`tests/test_integration.py` runs against real MySQL, PostgreSQL, ClickHouse and H2 servers when the matching
+`SQL2API_IT_*` environment variables are set (see the file header); otherwise those tests are skipped. CI runs them
+against service containers.

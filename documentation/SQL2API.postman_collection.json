@@ -1,0 +1,411 @@
+{
+  "info": {
+    "name": "SQL2API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Requests for the bundled examples (cd examples && sql2api serve)."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:5000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Query",
+      "item": [
+        {
+          "name": "Execute SQL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/execute_sql?format=json&page=1&page_size=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "execute_sql"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "json"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "page_size",
+                  "value": "5"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sql\": \"SELECT * FROM actor WHERE actor_id > :min\",\n    \"params\": {\n        \"min\": 10\n    },\n    \"connection_name\": \"sakila-sqlite\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Execute SQL (CSV)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/execute_sql?format=csv&page_size=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "execute_sql"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "csv"
+                },
+                {
+                  "key": "page_size",
+                  "value": "5"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sql\": \"SELECT * FROM albums\",\n    \"connection_name\": \"chinook-sqlite\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Saved queries",
+      "item": [
+        {
+          "name": "Save a query",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/save_sql_to_file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "save_sql_to_file"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"filename\": \"actor_by_id\",\n    \"sql_query\": \"SELECT * FROM actor WHERE actor_id = :id\",\n    \"query_parameters\": {\n        \"id\": \"int\"\n    },\n    \"connection_name\": \"sakila-sqlite\",\n    \"author\": \"me\",\n    \"description\": \"Look up an actor\",\n    \"tags\": [\n        \"example\"\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Run a saved query (GET)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/q/actor_by_id?id=7",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "q",
+                "actor_by_id"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "7"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Run a saved query (POST)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/q/actor_by_id?format=yaml",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "q",
+                "actor_by_id"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "yaml"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"params\": {\n        \"id\": 7\n    },\n    \"version\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Run by file path",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/execute_sql_from_file?page_size=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "execute_sql_from_file"
+              ],
+              "query": [
+                {
+                  "key": "page_size",
+                  "value": "2"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"filepath\": \"saved_sql/actor_by_id.json\",\n    \"connection_name\": \"sakila-sqlite\",\n    \"placeholders\": {\n        \"id\": 7\n    },\n    \"format\": \"csv\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List saved queries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/list_files?sort_by=name&sort_order=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "list_files"
+              ],
+              "query": [
+                {
+                  "key": "sort_by",
+                  "value": "name"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "desc"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "View a saved query file",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/view_file_content?filename=actor_by_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "view_file_content"
+              ],
+              "query": [
+                {
+                  "key": "filename",
+                  "value": "actor_by_id"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete a version",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/saved_sql/actor_by_id?version=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "saved_sql",
+                "actor_by_id"
+              ],
+              "query": [
+                {
+                  "key": "version",
+                  "value": "2"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Connections",
+      "item": [
+        {
+          "name": "List connections",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/connections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connections"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add or update a connection",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/connections",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connections"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"connections\": {\n        \"reporting\": {\n            \"db\": \"postgres\",\n            \"host\": \"localhost\",\n            \"port\": 5432,\n            \"database\": \"postgres\",\n            \"user\": \"postgres\",\n            \"password\": \"${POSTGRES_PASSWORD}\",\n            \"active\": false\n        }\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Delete a connection",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/connections/reporting",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "connections",
+                "reporting"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Service",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "OpenAPI",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/openapi.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "openapi.json"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

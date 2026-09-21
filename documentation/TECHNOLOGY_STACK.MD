@@ -10,7 +10,7 @@
 
 |Library                  |Purpose                                                   |
 |-------------------------|----------------------------------------------------------|
-|Flask                    |HTTP server and routing                                   |
+|Flask                    |HTTP server and routing (gunicorn recommended in production)|
 |mysql-connector-python   |MySQL driver                                              |
 |psycopg2                 |PostgreSQL driver                                         |
 |clickhouse-driver        |ClickHouse driver                                         |
@@ -23,11 +23,16 @@
 
 ### How it fits together
 
-`code/SQL2API.py` is a single Flask module:
+The `sql2api` package is a small Flask application:
 
-- **Config and helpers**: paths, environment-variable settings, JSON encoding, error handling and the optional API-key check.
-- **Saved queries**: JSON files in `code/saved_sql`, one file per query with a numbered entry per version. All file access is confined to that folder.
-- **Connection registry**: `code/db_connections.json`, read on every request so edits take effect without a restart.
-- **SQL validation**: single statement only, read-only unless `SQL2API_ALLOW_WRITES` is set; a trailing `LIMIT` is replaced by the requested page.
-- **Runners**: one function per database type. Each connects, applies the read-only session setting where the driver supports it, runs the query, closes the connection, and returns `(columns, rows)`.
-- **`ResultSetDTO`**: turns columns and rows into JSON, CSV, TSV, XML, YAML or XLSX responses.
+| Module | Responsibility |
+|--------|----------------|
+| `app.py` | Flask app factory and HTTP routes |
+| `engine.py` | Looks up the connection, validates the SQL, runs it, wraps the page of results |
+| `runners.py` | One runner per database type: connect, bind parameters in the driver's style, run, close |
+| `sqltools.py` | SQL validation (single statement, read-only), pagination, `:name` binding and `{name}` substitution |
+| `formats.py` | Result set and the JSON / NDJSON / CSV / TSV / XML / YAML / XLSX converters |
+| `store.py` | Connection registry and saved-query files; all file access is confined to the data folder |
+| `config.py` | Environment-variable configuration |
+| `openapi.py` | OpenAPI document and the Swagger UI page |
+| `cli.py` | `sql2api serve` / `sql2api init` |

@@ -1,0 +1,49 @@
+{
+    "connections": {
+        "sakila-sqlite": {
+            "db": "sqlite",
+            "database": "sqlite-sakila.db",
+            "active": true
+        },
+        "chinook-sqlite": {
+            "db": "sqlite",
+            "database": "chinook.db",
+            "active": true
+        },
+        "postgres": {
+            "db": "postgres",
+            "host": "localhost",
+            "port": 5432,
+            "database": "postgres",
+            "user": "postgres",
+            "password": "${POSTGRES_PASSWORD}",
+            "active": false
+        },
+        "mysql": {
+            "db": "mysql",
+            "host": "localhost",
+            "port": 3306,
+            "database": "mydb",
+            "user": "root",
+            "password": "${MYSQL_PASSWORD}",
+            "active": false
+        },
+        "clickhouse": {
+            "db": "clickhouse",
+            "host": "localhost",
+            "port": 9000,
+            "database": "default",
+            "user": "default",
+            "password": "",
+            "active": false
+        },
+        "h2": {
+            "db": "h2",
+            "host": "localhost",
+            "database": "test",
+            "user": "SA",
+            "password": "",
+            "active": false
+        }
+    }
+}

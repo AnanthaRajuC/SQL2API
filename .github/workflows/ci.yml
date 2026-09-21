@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: python -m unittest discover -s tests -t . -v
+
+  integration:
+    name: Integration (real databases)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pw
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: pw
+          MYSQL_DATABASE: it
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -ppw" --health-interval 5s --health-timeout 5s --health-retries 20
+      clickhouse:
+        image: clickhouse/clickhouse-server:24.8
+        env:
+          CLICKHOUSE_PASSWORD: pw
+        ports: ["9000:9000"]
+        options: >-
+          --health-cmd "wget --spider -q localhost:8123/ping" --health-interval 5s --health-timeout 5s
+          --health-retries 20
+    env:
+      SQL2API_IT_POSTGRES: '{"host": "localhost", "port": 5432, "user": "postgres", "password": "pw", "database": "postgres"}'
+      SQL2API_IT_MYSQL: '{"host": "127.0.0.1", "port": 3306, "user": "root", "password": "pw", "database": "it"}'
+      SQL2API_IT_CLICKHOUSE: '{"host": "localhost", "port": 9000, "user": "default", "password": "pw", "database": "default"}'
+      SQL2API_IT_H2: '{"host": "localhost", "user": "SA", "password": "", "database": "it"}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: pip install -e ".[all]"
+      - name: Start H2 server
+        run: |
+          java -cp sql2api/lib/h2-2.2.224.jar org.h2.tools.Server -tcp -tcpPort 9092 -ifNotExists &
+          sleep 5
+      - run: python -m unittest tests.test_integration -v
+
+  build:
+    name: Build package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - name: Wheel contains the bundled H2 driver
+        run: unzip -l dist/*.whl | grep h2-2.2.224.jar
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t sql2api .
+      - name: Container starts and answers
+        run: |
+          docker run -d --name s2a -p 5000:5000 sql2api
+          for i in $(seq 1 20); do curl -fs localhost:5000/health && exit 0; sleep 1; done
+          docker logs s2a; exit 1

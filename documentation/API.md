@@ -1,194 +1,163 @@
-## API
+# API reference
 
-This application comes with the following out-of-the-box API's.
+Base URL when running locally: `http://127.0.0.1:5000`. The same information is available interactively at `/docs`
+and as an OpenAPI document at `/openapi.json`.
 
-- **`/view_file_content`**: Retrieves the content of a specified file.  
+If the server sets `SQL2API_API_KEY`, send it with every request as `X-API-Key: <key>` (`/health`, `/docs` and
+`/openapi.json` are always public).
 
-- **`/save_sql_to_file`**: Saves SQL queries along with metadata to JSON files.  
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| [`/execute_sql`](#execute-sql) | POST | Run ad-hoc SQL |
+| [`/q/<name>`](#run-a-saved-query) | GET, POST | Run a saved query as an endpoint |
+| [`/execute_sql_from_file`](#run-a-saved-query) | POST | Run a saved query by file path |
+| [`/execute_sql_with_parameters_from_file`](#run-a-saved-query) | POST | Same as above (kept for compatibility) |
+| [`/save_sql_to_file`](#save-a-query) | PATCH | Save a query / add a version |
+| [`/list_files`](#list-saved-queries) | GET | List saved queries |
+| [`/saved_sql/<name>`](#delete-a-saved-query) | DELETE | Delete a saved query or one version |
+| [`/view_file_content`](#view-a-saved-query-file) | GET | Raw saved-query file |
+| [`/connections`](#connections) | GET, PATCH | List / add / update connections |
+| [`/connections/<name>`](#connections) | DELETE | Delete a connection |
+| `/health` | GET | `{"status": "ok", "version": "..."}` |
 
--  **`/execute_sql`**: Executes SQL queries and returns results in various formats.  
-  
--  **`/execute_sql_with_parameters_from_file`**: Executes SQL queries from files with placeholder substitution.  
-  
--  **`/list_files`**: Lists JSON files containing saved SQL queries along with their metadata.  
-  
--  **`/connections`**: GET retrieves all database connections, and PATCH updates database connections.  
-  
--  **`/execute_sql_from_file`**: Executes SQL queries from files.  
+## Common query parameters
 
-## Route Endpoint Details
+These apply to every endpoint that returns rows.
 
-| Endpoint                                | Method | Handler Function                           | File             |
-|-----------------------------------------|--------|---------------------------------------------|------------------|
-| `/execute_sql`                          | POST   | `execute_sql_endpoint()`                    | `code/SQL2API.py`|
-| `/execute_sql_from_file`               | POST   | `execute_sql_from_file()`                  | `code/SQL2API.py`|
-| `/execute_sql_with_parameters_from_file` | POST   | `execute_sql_with_parameters_from_file()`  | `code/SQL2API.py`|
-| `/save_sql_to_file`                    | PATCH  | `save_sql_to_file()`                       | `code/SQL2API.py`|
-| `/list_files`                          | GET    | `list_files()`                             | `code/SQL2API.py`|
-| `/view_file_content`                  | GET    | `view_file_content()`                      | `code/SQL2API.py`|
-| `/connections`                         | GET    | `get_connections()`                        | `code/SQL2API.py`|
-| `/connections`                         | PATCH  | `update_connections()`                     | `code/SQL2API.py`|
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `format` | `json` | `json`, `ndjson`, `csv`, `tsv`, `xml`, `yaml` or `xlsx`. For the POST endpoints it may also be given in the JSON body. |
+| `page` | `1` | 1-based page number. |
+| `page_size` | `10` | Rows per page, at most `SQL2API_MAX_PAGE_SIZE` (default 1000). |
 
-### List DB Connections
+Any trailing `LIMIT`/`OFFSET` in the SQL is replaced by the requested page. Responses carry
+`X-Page`, `X-Page-Size` and `X-Has-More` (`true` when another page exists). A query that returns no rows answers
+`{"message": "No results returned"}`.
 
-|                                          URL                       | Method |          Remarks         | Sample Valid Request Body |
-|--------------------------------------------------------------------|--------|--------------------------|---------------------------|
-|`http://localhost:5000/connections`                                 | GET    |List DB Connections.      |  None                     |
+## Execute SQL
 
-### Create/Update DB Connections
+`POST /execute_sql?format=json&page=1&page_size=5`
 
-|                                          URL                       | Method |          Remarks            | Sample Valid Request Body |
-|--------------------------------------------------------------------|--------|-----------------------------|---------------------------|
-|`http://localhost:5000/connections`                                 | PATCH  |Create/Update DB Connections.|  [JSON](#connections)     |
+~~~json
+{
+    "sql": "SELECT * FROM actor WHERE actor_id > :min AND first_name LIKE :name",
+    "params": {"min": 10, "name": "A%"},
+    "connection_name": "sakila-sqlite"
+}
+~~~
 
-`db` must be one of `mysql`, `postgres`, `clickhouse`, `sqlite`, `h2`. A connection is only usable when `"active": true`.
-`GET /connections` masks passwords as `********`; sending that mask back in a PATCH keeps the stored password.
+- `:name` markers are **bound parameters**: values are sent to the database separately from the SQL. Markers inside
+  string literals, comments and Postgres `::` casts are ignored. Every marker needs a value in `params`.
+- Unless the server sets `SQL2API_ALLOW_WRITES=1`, only a single `SELECT`, `WITH`, `SHOW`, `DESCRIBE`, `EXPLAIN` or
+  `VALUES` statement is accepted (403 otherwise; 400 for several statements).
+
+## Save a query
+
+`PATCH /save_sql_to_file`
+
+~~~json
+{
+    "filename": "actor_by_id",
+    "sql_query": "SELECT * FROM actor WHERE actor_id = :id",
+    "query_parameters": {"id": "int"},
+    "connection_name": "sakila-sqlite",
+    "author": "anantha",
+    "description": "Look up an actor",
+    "tags": ["example"]
+}
+~~~
+
+- `filename` may contain letters, digits, spaces, `.`, `_` and `-`. Saving to an existing name creates the next version.
+- `query_parameters` declares parameter types (`int`, `float`, `str`, `bool`) used to convert query-string values.
+- `connection_name` (optional) is the default connection when a run does not name one.
+- Response: `{"message": "...", "filename": "actor_by_id", "uuid": "...", "version": 2}`.
+
+## Run a saved query
+
+`GET /q/actor_by_id?id=7&format=csv` - query-string arguments other than `format`, `page`, `page_size`,
+`connection_name` and `version` become parameters.
+
+`POST /q/actor_by_id` - the JSON body may contain `params`, `connection_name`, `version` and `format`:
+
+~~~json
+{"params": {"id": 7}, "connection_name": "sakila-sqlite", "version": 1}
+~~~
+
+- The latest version runs unless `version` is given.
+- `connection_name` from the request wins over the saved default.
+- Each run is appended to that version's `execution_history` (last 50 runs: time, connection, status, rows, duration).
+
+The older endpoints `POST /execute_sql_from_file` and `POST /execute_sql_with_parameters_from_file` do the same thing
+with the query named in the body:
+
+~~~json
+{
+    "filepath": "saved_sql/actor_by_id.json",
+    "connection_name": "sakila-sqlite",
+    "placeholders": {"id": 7},
+    "format": "csv"
+}
+~~~
+
+`filepath` may be a bare name (`actor_by_id`), a path relative to the data folder, or an absolute path - but it must
+resolve to a `.json` file inside `saved_sql/`.
+
+### Text placeholders (legacy)
+
+Saved SQL may also contain `{name}` placeholders, which are substituted **as text** before the query runs. Because the
+value becomes part of the SQL it must be a number, a boolean, or a string made only of letters, digits, whitespace and
+`. , : @ % + / -`; anything else is rejected. Prefer bound `:name` parameters.
+
+## List saved queries
+
+`GET /list_files?sort_by=name&sort_order=desc` - `sort_by` is `name` (default) or `modified`, `sort_order` is `asc`
+(default) or `desc`. Returns every query with its versions' metadata (not the SQL text).
+
+## Delete a saved query
+
+`DELETE /saved_sql/actor_by_id` removes the whole query; `DELETE /saved_sql/actor_by_id?version=2` removes one
+version (the file goes with its last version).
+
+## View a saved query file
+
+`GET /view_file_content?filename=actor_by_id` returns `{"content": "<raw file text>"}`. Only files in `saved_sql/`
+can be read.
+
+## Connections
+
+`GET /connections` lists connections; stored passwords are shown as `********` (values that are `${ENV_VAR}`
+references are shown as written).
+
+`PATCH /connections` adds or replaces connections. Sending the `********` mask back for an existing connection keeps
+its stored password.
 
 ~~~json
 {
     "connections": {
-        "localhost-test": {
-            "database": "test1",
+        "reporting": {
             "db": "postgres",
-            "host": "localhost",
-            "password": "1",
-            "user": "default1",
+            "host": "db.internal",
+            "port": 5432,
+            "database": "reports",
+            "user": "readonly",
+            "password": "${REPORTING_PASSWORD}",
             "active": true
         }
-    }        
+    }
 }
 ~~~
 
----  
+`DELETE /connections/reporting` removes one. See [DATABASE_CONNECTION_CONFIGURATION.md](DATABASE_CONNECTION_CONFIGURATION.md)
+for the connection fields.
 
-### Execute SQL Directly from an endpoint
+## Errors
 
-Execute SQL passed via the endpoint.
-
-|                                          URL                       | Method |          Remarks         | Sample Valid Request Body |
-|--------------------------------------------------------------------|--------|--------------------------|---------------------------|
-|`http://localhost:5000/execute_sql?format=json&page_size=5&page=1`  | POST   |Direct SQL execution.     | [JSON](#api)              |
-
-Query parameters: `format` (`json` default, `csv`, `tsv`, `xml`, `yaml`, `xlsx`), `page` (default 1) and `page_size` (default 10, max 1000).
-Any trailing `LIMIT`/`OFFSET` in the SQL is replaced by the requested page. Only single read-only statements are accepted unless the server sets `SQL2API_ALLOW_WRITES=1`.
-
-~~~json
-{
-    "sql": "SELECT * FROM sakila.film_category;",
-    "connection_name": "localhost-mysql"
-}
-~~~
-
-~~~json
-{
-    "sql": "SELECT * FROM sakila.film_category",
-    "connection_name": "localhost-clickhouse"
-}
-~~~
-
-~~~json
-{
-    "sql": "SELECT * FROM playground",
-    "connection_name": "localhost-postgres"
-}
-~~~
-
-~~~json
-{
-    "sql": "SELECT * FROM actor",
-    "connection_name": "localhost-sqlite"
-}
-~~~
-
---- 
-
-### Save SQL  
-
-Save SQL to a file to be called at a later point in time.
-
-|                                          URL                       | Method |          Remarks         | Sample Valid Request Body |
-|--------------------------------------------------------------------|--------|--------------------------|---------------------------|
-|`http://localhost:5000/save_sql_to_file`                            | PATCH  |Save sql to a file.       | [JSON](#login)            |
-
-~~~json
-{
-    "sql_query": "SELECT id FROM sakila.film_category;",
-    "author": "anantha",
-    "description": "clickhouse 22 test doc",
-    "tags": "test,prod",
-    "filename": "clickhouse query for sfc updated3.",
-    "query_parameters": {},
-    "status": "active",
-    "execution_history": []
-}
-~~~
-
-Filenames may contain letters, digits, spaces, `.`, `_` and `-`. Saving to an existing filename creates the next version.
-
-### List Saved SQL Files
-
-`sort_by` is `name` (default) or `modified`; `sort_order` is `asc` (default) or `desc`.
-
-|                                          URL                       | Method |          Remarks         | Sample Valid Request Body |
-|--------------------------------------------------------------------|--------|--------------------------|---------------------------|
-|`http://localhost:5000/list_files?sort_by=name&sort_order=desc`     | Get    | List saved Files.        |                           |
-
----
-
-### Execute Saved SQL Files
-
-`filepath` may be a bare name (`cht`), a path relative to `code/` (`saved_sql/cht.json`) or an absolute path, but it must resolve to a `.json` file inside `code/saved_sql`.
-`format` can be given in the body (as below) or as a query parameter. The latest version of the query is executed.
-
-|                                          URL                                 | Method |          Remarks         | Sample Valid Request Body |
-|------------------------------------------------------------------------------|--------|--------------------------|---------------------------|
-|`http://localhost:5000/execute_sql_from_file?page_size=2&page=2`     | Post   | Execute saved File.      |  [JSON](#login)           |
-
-~~~json
-{
-    "filepath": "saved_sql/cht.json",
-    "connection_name": "localhost-clickhouse",
-    "format": "tsv"
-}
-~~~
-
-~~~json
-{
-    "filepath": "saved_sql/abc.json",
-    "connection_name": "localhost-mysql",
-    "format": "tsv"
-}
-~~~
-
-### Execute Saved SQL Files with Parameters
-
-Placeholders written as `{name}` in the saved SQL are replaced with the values in `placeholders`.
-Values must be numbers, booleans or text made of letters, digits, whitespace and `. , : @ % + / -`; anything else is rejected with a 400, as is a placeholder with no value.
-
-|                                          URL                                            | Method |
-|-----------------------------------------------------------------------------------------|--------|
-|`http://localhost:5000/execute_sql_with_parameters_from_file?page_size=10&page=1`        | Post   |
-
-~~~json
-{
-    "filepath": "saved_sql/by_actor.json",
-    "connection_name": "localhost-sqlite",
-    "placeholders": {"actor_id": 3}
-}
-~~~
-
-### View a Saved SQL File
-
-`GET http://localhost:5000/view_file_content?filename=cht` returns the raw file content. Only files in `code/saved_sql` can be read.
-
-### Errors
-
-Errors are returned as `{"error": "..."}` (plus a `"detail"` with the database's message for failed queries).
+Errors are returned as `{"error": "..."}`; failed queries also include `"detail"` with the database's message.
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Missing or invalid input (SQL, paging, format, filename, placeholders, multiple statements) |
+| 400 | Missing or invalid input (SQL, paging, format, filename, parameters, several statements) |
 | 401 | Missing or wrong `X-API-Key` (only when `SQL2API_API_KEY` is set) |
-| 403 | Inactive connection, write statement while writes are disabled, or file outside `saved_sql` |
-| 404 | Unknown connection or saved file |
+| 403 | Inactive connection, write statement while writes are disabled, or a file outside `saved_sql/` |
+| 404 | Unknown connection, saved query, version or file |
 | 500 | The database rejected the query or could not be reached |

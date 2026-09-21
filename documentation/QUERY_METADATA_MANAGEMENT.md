@@ -1,19 +1,26 @@
-## Query Metadata Management
+# Query metadata
 
-Each saved query contains comprehensive metadata that supports query organization, authoring, and lifecycle management.
+Each saved query is a JSON file in `saved_sql/` with one entry per version (`"1"`, `"2"`, ...). Saving under an existing
+name adds the next version; the latest version runs unless one is requested.
 
-## Metadata Field Descriptions
+| Field | Type | Purpose | Example |
+|-------|------|---------|---------|
+| `uuid` | string | Unique id of this version | `"c031f3ba-8b49-4e74-adf3-b085a12581f8"` |
+| `sql_query` | string | The SQL, with optional `:name` parameters | `"SELECT * FROM actor WHERE actor_id = :id"` |
+| `author` | string | Who saved it | `"anantha"` |
+| `description` | string | What it is for | `"Look up an actor"` |
+| `tags` | string or array | Labels | `["example"]` |
+| `query_parameters` | object | Declared parameter types (`int`, `float`, `str`, `bool`) | `{"id": "int"}` |
+| `connection_name` | string | Optional default connection for `/q/<name>` | `"sakila-sqlite"` |
+| `created_at`, `last_modified_at` | string | Timestamps | `"2024-03-23 23:50:57"` |
+| `status` | string | Query state | `"active"` |
+| `version` | integer | Version number | `2` |
+| `execution_history` | array | The last 50 runs of this version | see below |
 
-| Field             | Type         | Purpose                     | Example                                          |
-|------------------|--------------|-----------------------------|--------------------------------------------------|
-| uuid             | String       | Unique identifier per version | `"c031f3ba-8b49-4e74-adf3-b085a12581f8"`        |
-| sql_query        | String       | SQL statement content        | `"SELECT * FROM sakila.actor;"`                 |
-| author           | String       | Query creator                | `"anantha"`                                     |
-| description      | String       | Query documentation          | `"Retrieves all actors from sakila database"`   |
-| tags             | String/Array | Classification labels        | `"test,prod"`                                   |
-| query_parameters | Object       | Parameter definitions        | `{}`                                            |
-| created_at       | String       | Creation timestamp           | `"2024-03-23 23:50:57"`                          |
-| last_modified_at | String       | Last update timestamp        | `"2024-03-23 23:50:57"`                          |
-| status           | String       | Query state                  | `"active"`                                      |
-| version          | Integer      | Version number               | `1`                                              |
-| execution_history| Array        | Execution tracking           | `[]`                                             |
+An `execution_history` entry looks like:
+
+~~~json
+{"executed_at": "2024-03-23 23:51:02", "connection_name": "sakila-sqlite", "status": "success", "rows": 1, "duration_ms": 4}
+~~~
+
+Failed runs are recorded with `"status": "error"` and an `"error"` message instead of `rows` and `duration_ms`.

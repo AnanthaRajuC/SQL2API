@@ -1,0 +1,9 @@
+.git
+.venv
+.idea
+**/__pycache__
+tests
+examples
+db_connections.json
+saved_sql
+dist

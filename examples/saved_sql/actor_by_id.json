@@ -1,0 +1,38 @@
+{
+    "1": {
+        "uuid": "00000000-0000-4000-8000-000000000001",
+        "sql_query": "SELECT actor_id, first_name FROM actor WHERE actor_id = :id",
+        "author": "sql2api",
+        "description": "Look up an actor (first name only)",
+        "tags": [
+            "example"
+        ],
+        "query_parameters": {
+            "id": "int"
+        },
+        "connection_name": "sakila-sqlite",
+        "created_at": "2024-01-01 09:00:00",
+        "last_modified_at": "2024-01-01 09:00:00",
+        "status": "active",
+        "version": 1,
+        "execution_history": []
+    },
+    "2": {
+        "uuid": "00000000-0000-4000-8000-000000000002",
+        "sql_query": "SELECT actor_id, first_name, last_name FROM actor WHERE actor_id = :id",
+        "author": "sql2api",
+        "description": "Look up an actor by id",
+        "tags": [
+            "example"
+        ],
+        "query_parameters": {
+            "id": "int"
+        },
+        "connection_name": "sakila-sqlite",
+        "created_at": "2024-01-01 09:00:00",
+        "last_modified_at": "2024-01-01 09:00:00",
+        "status": "active",
+        "version": 2,
+        "execution_history": []
+    }
+}
