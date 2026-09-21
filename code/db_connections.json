@@ -34,11 +34,8 @@
         },
         "localhost-sqlite": {
             "active": true,
-            "database": "sakila",
-            "db": "clickhouse",
-            "host": "localhost",
-            "password": "root",
-            "user": "default"
+            "database": "sqlite-sakila.db",
+            "db": "sqlite"
         }
     }
 }

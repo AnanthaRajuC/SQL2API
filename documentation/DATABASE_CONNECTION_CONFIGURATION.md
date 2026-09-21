@@ -29,6 +29,7 @@ The SQL2API system supports five different database types, each with specific co
 | user      | string   | Yes*     | Database username                |
 | password  | string   | Yes*     | Database password                |
 | database  | string   | Yes      | Database name or file path       |
+| port      | integer  | No       | Overrides the driver's default port |
 | active    | boolean  | Yes      | Connection availability flag     |
 
 - **Not** required for SQLite connections which only need database (file path)
@@ -47,7 +48,8 @@ When modifying the `db_connections.json` file, follow these guidelines:
 - **Required Parameters**: Network-based databases require `host`, `user`, `password`, and `database` parameters
 - **Database Type Mapping**: The `db` parameter must match one of the supported database types: `mysql`, `postgres`, `clickhouse`, `h2`, or `sqlite`
 - **Active Status**: Use the `active` flag to control connection availability without removing configuration
-- **File Paths**: For SQLite connections, use relative or absolute file paths in the `database` parameter
+- **File Paths**: For SQLite connections, use relative (resolved against the `code/` folder) or absolute file paths in the `database` parameter
+- **Passwords**: `GET /connections` never returns stored passwords (they appear as `********`); keep `db_connections.json` out of version control for real credentials
 
 
 

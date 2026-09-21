@@ -8,23 +8,56 @@
 
 SQL2API is a middleware solution that bridges the gap between SQL databases and REST APIs. The system accepts SQL queries through HTTP endpoints and executes them against configured database connections, returning results in multiple formats including JSON, XML, YAML, CSV, TSV, and XLSX.
 
-|---------------|------|-----|-----|-----|------|------|
 | Database      | JSON | XML | YAML| CSV |  TSV | XLSX |
 |---------------|------|-----|-----|-----|------|------|
 | MySQL         | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 | Postgres      | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 | ClickHouse    | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 | H2            | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
+| SQLite        | ✅   | ✅  | ✅  | ✅  | ✅   | ✅   |
 
-**Executing SQL Queries:** Users can execute SQL queries by sending POST requests to the '/execute_sql' endpoint of the application. They need to provide the SQL query and the connection name as part of the request body.
+## Quick start
 
-**Query Parameterization:** The application supports query parameterization by allowing users to specify placeholders in their SQL queries. Placeholder values can be provided as part of the request body when executing the query.
+~~~bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cd code
+python SQL2API.py            # http://127.0.0.1:5000
+~~~
 
-**Saving and Managing Queries:** Users can save SQL queries along with metadata such as author, description, and tags by sending PATCH requests to the '/save_sql_to_file' endpoint. They can also manage saved queries, including editing and deleting them.
+~~~bash
+curl -X POST 'http://localhost:5000/execute_sql?format=csv&page=1&page_size=5' \
+     -H 'Content-Type: application/json' \
+     -d '{"sql": "SELECT * FROM actor", "connection_name": "localhost-sqlite"}'
+~~~
 
-**Listing Saved Queries:** Users can list the saved queries stored in the application by sending GET requests to the '/list_files' endpoint. The endpoint returns a list of filenames along with versioning information and metadata for each saved query.
+Run the tests from the `code` folder with `python -m unittest discover -s tests -t .`.
 
-**Connection Management:** Users can manage database connections by sending PATCH requests to the '/connections' endpoint. They can add, edit, or delete connection details, including host, port, username, password, and database name.
+## Features
+
+**Executing SQL Queries:** POST the SQL and a connection name to `/execute_sql`. Results are paginated (`page`, `page_size`) and returned in the format given by `format` (json, csv, tsv, xml, yaml, xlsx).
+
+**Query Parameterization:** Saved queries can contain `{placeholders}`. Values are supplied in the request body when executing via `/execute_sql_with_parameters_from_file`; they must be numbers, booleans or plain text, so they cannot break out of the query.
+
+**Saving and Versioning Queries:** PATCH `/save_sql_to_file` stores a query with metadata (author, description, tags). Saving under an existing filename adds a new version; executing a saved query always runs the latest version.
+
+**Listing Saved Queries:** GET `/list_files` returns every saved query with its versions and metadata, and can be sorted with `sort_by` and `sort_order`.
+
+**Connection Management:** GET `/connections` lists the configured connections (passwords are masked) and PATCH `/connections` adds or updates them.
+
+## Safe by default
+
+SQL2API runs whatever SQL it is given, so it ships locked down. All of this is configured with environment variables:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `SQL2API_ALLOW_WRITES` | off | Only single, read-only statements (`SELECT`, `WITH`, `SHOW`, `DESCRIBE`, `EXPLAIN`) are accepted. Set to `1` to allow `INSERT`/`UPDATE`/DDL. |
+| `SQL2API_API_KEY` | unset | When set, every request must carry a matching `X-API-Key` header. |
+| `SQL2API_MAX_PAGE_SIZE` | `1000` | Upper limit for `page_size`. |
+| `SQL2API_HOST` / `SQL2API_PORT` | `127.0.0.1` / `5000` | Address the server binds to. |
+| `SQL2API_DEBUG` | off | Flask debug mode. Never enable on a network-reachable host. |
+
+Saved-query files can only be read from the `code/saved_sql` folder, and passwords in `db_connections.json` are never returned by the API. Even so, do not expose the service to untrusted networks without an API key and a reverse proxy in front of it.
 
 ---  
 

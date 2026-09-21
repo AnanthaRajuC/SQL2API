@@ -1,0 +1,11 @@
+Flask>=2.2
+PyYAML>=6.0
+openpyxl>=3.1
+
+# Database drivers - each is imported only when a connection of that type is used,
+# so you can drop the ones you do not need.
+mysql-connector-python>=8.0
+psycopg2-binary>=2.9
+clickhouse-driver>=0.2
+JayDeBeApi>=1.2      # H2 support; also needs a Java runtime
+JPype1>=1.4

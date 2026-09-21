@@ -6,22 +6,28 @@
 |--------------------------|-------------------------------------------------|
 |Python                    |High-level, general-purpose programming language.|
 
-###  Libraries
+### Libraries
 
-|                                      Technology                                               |                              Description                                                                                                                      |
-|-----------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-|mysql.connector                                                                                |                                                                                                                                                               |
+|Library                  |Purpose                                                   |
+|-------------------------|----------------------------------------------------------|
+|Flask                    |HTTP server and routing                                   |
+|mysql-connector-python   |MySQL driver                                              |
+|psycopg2                 |PostgreSQL driver                                         |
+|clickhouse-driver        |ClickHouse driver                                         |
+|sqlite3 (stdlib)         |SQLite driver                                             |
+|JayDeBeApi + JPype1      |H2 access through the bundled JDBC jar (needs Java)      |
+|openpyxl                 |XLSX output                                               |
+|PyYAML                   |YAML output                                               |
 
---- 
+---
 
-Imports: The code imports several modules including mysql.connector for MySQL database connectivity, json, os, uuid, xml.etree.ElementTree, yaml, csv, datetime, Flask, BytesIO, StringIO, Workbook from openpyxl, and Client from clickhouse_driver. These modules are used for database operations, file I/O, web server setup, and data serialization.  
+### How it fits together
 
-ResultSetDTO Class: This class represents a data transfer object (DTO) for handling database query results. It provides methods to convert query results to various formats such as CSV, TSV, XML, YAML, and XLSX.  
+`code/SQL2API.py` is a single Flask module:
 
-Database Connection and Execution Functions: The execute_sql function executes SQL queries against MySQL or ClickHouse databases based on provided connection details. It also handles pagination and error handling.  
-
-File Operations: The code includes functions to handle file operations such as reading content from files, saving SQL queries to files with metadata, listing files, and executing SQL queries from files.  
-
-JSON Configuration Files: The code interacts with JSON files to store database connection details and saved SQL queries.  
-
-Main Execution: The Flask application runs in debug mode when executed directly.  
+- **Config and helpers**: paths, environment-variable settings, JSON encoding, error handling and the optional API-key check.
+- **Saved queries**: JSON files in `code/saved_sql`, one file per query with a numbered entry per version. All file access is confined to that folder.
+- **Connection registry**: `code/db_connections.json`, read on every request so edits take effect without a restart.
+- **SQL validation**: single statement only, read-only unless `SQL2API_ALLOW_WRITES` is set; a trailing `LIMIT` is replaced by the requested page.
+- **Runners**: one function per database type. Each connects, applies the read-only session setting where the driver supports it, runs the query, closes the connection, and returns `(columns, rows)`.
+- **`ResultSetDTO`**: turns columns and rows into JSON, CSV, TSV, XML, YAML or XLSX responses.

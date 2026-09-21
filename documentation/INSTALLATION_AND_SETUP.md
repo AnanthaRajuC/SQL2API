@@ -27,6 +27,28 @@ The system supports multiple database types, requiring specific Python drivers:
 | SQLite         | `sqlite3`                | Built-in with Python |
 | H2 Database    | `jaydebeapi`             | `pip install`        |
 
+## Installing
+
+~~~bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+~~~
+
+The database drivers are imported lazily, so a driver you do not use does not need to be installed.
+H2 additionally needs a Java runtime (the JDBC jar is bundled in `code/`).
+
+## Configuration
+
+Runtime behaviour is controlled by environment variables - see the "Safe by default" table in the README
+(`SQL2API_ALLOW_WRITES`, `SQL2API_API_KEY`, `SQL2API_MAX_PAGE_SIZE`, `SQL2API_HOST`, `SQL2API_PORT`, `SQL2API_DEBUG`).
+
+## Running the tests
+
+~~~bash
+cd code
+python -m unittest discover -s tests -t .
+~~~
+
 ## Verification Steps
 
 **Environment Validation** 
