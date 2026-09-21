@@ -3,14 +3,16 @@ import hmac
 import logging
 import math
 
-from flask import Blueprint, Flask, Response, jsonify, redirect, request, url_for
+from flask import Blueprint, Flask, Response, current_app, g, jsonify, redirect, request, url_for
 from flask.json.provider import DefaultJSONProvider
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import config, engine, openapi, pool, sqltools, store
+from . import config, cors, engine, openapi, pool, sqltools, store
 from . import params as param_rules
 from .errors import ApiError
 from .formats import FORMATTERS, json_default
+from .ratelimit import RateLimiter
 
 log = logging.getLogger('sql2api')
 bp = Blueprint('api', __name__)
@@ -18,6 +20,7 @@ bp = Blueprint('api', __name__)
 # Query-string arguments that control a request rather than supplying query parameters.
 RESERVED_ARGS = {'format', 'page', 'page_size', 'connection_name', 'version', 'timeout'}
 PUBLIC_ENDPOINTS = {'api.index', 'api.favicon', 'api.health', 'api.docs', 'api.openapi_spec'}
+RATE_LIMIT_EXEMPT = {'api.health'}  # so monitoring keeps working while a client is being throttled
 
 
 class JSONProvider(DefaultJSONProvider):
@@ -27,7 +30,15 @@ class JSONProvider(DefaultJSONProvider):
 
 def create_app():
     from . import __version__
+    config.check_settings()
     app = Flask(__name__)
+    hops = config.proxy_hops()
+    if hops:  # behind reverse proxies: take the client address and scheme from their X-Forwarded-* headers
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops)
+    app.extensions['sql2api_limiter'] = RateLimiter()
+    if config.cors_origins() == '*' and not config.api_key():
+        log.warning('SQL2API_CORS_ORIGINS=* without SQL2API_API_KEY: any website a user visits can call this API '
+                    'from their browser and reach every active connection. Set an API key or list the origins.')
     app.json = JSONProvider(app)
     app.config['SQL2API_VERSION'] = __version__
 
@@ -45,9 +56,25 @@ def create_app():
         return jsonify({'error': 'An error occurred'}), 500
 
     @app.before_request
-    def require_api_key():
+    def gate():
+        # Order matters: a browser's preflight cannot carry the API key, and rate limiting comes before the key
+        # check so that guessing keys is throttled too.
+        if cors.is_preflight(request):
+            return cors.preflight_response(request.headers.get('Origin'))
+        limited = check_rate_limit()
+        if limited is not None:
+            return limited
         if request.endpoint not in PUBLIC_ENDPOINTS and not has_valid_key():
             return jsonify({'error': 'Unauthorized'}), 401
+
+    @app.after_request
+    def decorate(response):
+        cors.add_headers(response, request.headers.get('Origin'))
+        if g.get('rate_limit'):
+            limit, remaining = g.rate_limit
+            response.headers['X-RateLimit-Limit'] = str(limit)
+            response.headers['X-RateLimit-Remaining'] = str(remaining)
+        return response
 
     app.register_blueprint(bp)
     return app
@@ -56,6 +83,23 @@ def create_app():
 # --------------------------------------------------------------------------------------
 # Request helpers
 # --------------------------------------------------------------------------------------
+
+def check_rate_limit():
+    """Count this request against its client's quota; returns a 429 response when it is over the limit."""
+    limit = config.rate_limit()
+    if limit is None or request.method == 'OPTIONS' or request.endpoint in RATE_LIMIT_EXEMPT:
+        return None
+    count, period = limit
+    client = request.remote_addr or 'unknown'
+    allowed, remaining, retry_after = current_app.extensions['sql2api_limiter'].hit(client, count, period)
+    g.rate_limit = (count, remaining)
+    if allowed:
+        return None
+    response = jsonify({'error': 'Rate limit exceeded', 'retry_after': retry_after})
+    response.status_code = 429
+    response.headers['Retry-After'] = str(retry_after)
+    return response
+
 
 def has_valid_key():
     """True when no API key is configured, or the request carries the right X-API-Key header."""

@@ -187,6 +187,18 @@ its stored password.
 `DELETE /connections/reporting` removes one. See [DATABASE_CONNECTION_CONFIGURATION.md](DATABASE_CONNECTION_CONFIGURATION.md)
 for the connection fields.
 
+## Rate limiting and CORS
+
+Both are off unless the server enables them (`SQL2API_RATE_LIMIT`, `SQL2API_CORS_ORIGINS`).
+
+- **Rate limit.** When enabled, every response carries `X-RateLimit-Limit` (the quota) and `X-RateLimit-Remaining`. A
+  client over its limit receives **429** with a `Retry-After` header (seconds) and
+  `{"error": "Rate limit exceeded", "retry_after": 12}`. `/health` is never limited.
+- **CORS.** For listed origins the server answers preflight (`OPTIONS`) requests and adds
+  `Access-Control-Allow-Origin` to responses, exposing `X-Page`, `X-Page-Size`, `X-Has-More`, `X-RateLimit-*` and
+  `Retry-After` to the page's JavaScript. Allowed methods are `GET, POST, PATCH, DELETE, OPTIONS`; allowed request
+  headers are `Content-Type` and `X-API-Key`. Credentials (cookies) are not used.
+
 ## Interactive documentation
 
 `/docs` (Swagger UI, backed by `/openapi.json`) documents the generic API and also lists **every saved query as its own
@@ -205,6 +217,7 @@ Errors are returned as `{"error": "..."}`; failed queries also include `"detail"
 |--------|---------|
 | 400 | Missing or invalid input (SQL, paging, format, filename, parameters, several statements). Parameter-rule violations add an `errors` map keyed by parameter name. |
 | 401 | Missing or wrong `X-API-Key` (only when `SQL2API_API_KEY` is set) |
+| 429 | Rate limit exceeded; wait `Retry-After` seconds |
 | 403 | Inactive connection, write statement while writes are disabled, or a file outside `saved_sql/` |
 | 404 | Unknown connection, saved query, version or file |
 | 500 | The database rejected the query or could not be reached |

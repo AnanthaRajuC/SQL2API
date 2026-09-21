@@ -1,5 +1,6 @@
 """Runtime configuration, read from environment variables at call time."""
 import os
+import re
 from pathlib import Path
 
 SUPPORTED_DB_TYPES = ('mysql', 'postgres', 'clickhouse', 'sqlite', 'h2')
@@ -92,6 +93,60 @@ def pool_idle_timeout():
     except ValueError:
         return DEFAULT_POOL_IDLE_TIMEOUT
     return value if value > 0 else DEFAULT_POOL_IDLE_TIMEOUT
+
+
+def cors_origins():
+    """Origins allowed to call the API from a browser (SQL2API_CORS_ORIGINS): None (off), '*' or a frozenset.
+
+    Entries are compared case-insensitively and without a trailing slash, e.g. https://app.example.com.
+    """
+    raw = os.environ.get('SQL2API_CORS_ORIGINS', '').strip()
+    if not raw:
+        return None
+    origins = [item.strip().rstrip('/').lower() for item in raw.split(',') if item.strip()]
+    if '*' in origins:
+        return '*'
+    return frozenset(origins) or None
+
+
+_RATE_PERIODS = {'second': 1, 'minute': 60, 'hour': 3600, 'day': 86400}
+_RATE_RE = re.compile(r'^\s*(\d+)\s*/\s*(second|minute|hour|day)s?\s*$', re.I)
+
+
+def parse_rate_limit(text):
+    """Parse '60/minute' (also second, hour, day) into (requests, seconds); raises ValueError when malformed."""
+    match = _RATE_RE.match(text or '')
+    if not match or int(match.group(1)) < 1:
+        raise ValueError(f"SQL2API_RATE_LIMIT must look like '60/minute' (a positive count, then second, minute, "
+                         f"hour or day), not {text!r}")
+    return int(match.group(1)), _RATE_PERIODS[match.group(2).lower()]
+
+
+def rate_limit():
+    """(requests, seconds) allowed per client (SQL2API_RATE_LIMIT), or None when limiting is off."""
+    raw = os.environ.get('SQL2API_RATE_LIMIT', '').strip()
+    if not raw:
+        return None
+    try:
+        return parse_rate_limit(raw)
+    except ValueError:
+        return None  # create_app() rejects a malformed value at startup; never limit by accident afterwards
+
+
+def proxy_hops():
+    """Reverse proxies in front of the app whose X-Forwarded-* headers can be trusted (SQL2API_TRUST_PROXY)."""
+    try:
+        return max(0, int(os.environ.get('SQL2API_TRUST_PROXY', 0)))
+    except ValueError:
+        return 0
+
+
+def check_settings():
+    """Raise ValueError for a malformed setting, so a typo fails at startup instead of silently switching off a
+    protection."""
+    raw = os.environ.get('SQL2API_RATE_LIMIT', '').strip()
+    if raw:
+        parse_rate_limit(raw)
 
 
 def max_page_size():

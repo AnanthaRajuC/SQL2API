@@ -57,7 +57,8 @@ db_connections.json && sql2api serve`.
 
 Behaviour is controlled by environment variables - see the table in the [README](../README.md#configuration)
 (`SQL2API_HOME`, `SQL2API_ALLOW_WRITES`, `SQL2API_API_KEY`, `SQL2API_MAX_PAGE_SIZE`, `SQL2API_QUERY_TIMEOUT`,
-`SQL2API_POOL_SIZE`, `SQL2API_POOL_IDLE_TIMEOUT`, `SQL2API_HOST`, `SQL2API_PORT`, `SQL2API_DEBUG`, `SQL2API_H2_JAR`).
+`SQL2API_POOL_SIZE`, `SQL2API_POOL_IDLE_TIMEOUT`, `SQL2API_CORS_ORIGINS`, `SQL2API_RATE_LIMIT`,
+`SQL2API_TRUST_PROXY`, `SQL2API_HOST`, `SQL2API_PORT`, `SQL2API_DEBUG`, `SQL2API_H2_JAR`).
 
 ## Running in production
 
@@ -68,6 +69,9 @@ connection files are protected by an in-process lock) and several threads, behin
 pip install "sql2api[server]"
 SQL2API_API_KEY=change-me gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 8 "sql2api.app:create_app()"
 ~~~
+
+Behind a reverse proxy or load balancer, also set `SQL2API_TRUST_PROXY=1` (the number of proxies) so rate limits and
+redirects use the real client address and scheme.
 
 Or use the [Dockerfile](../Dockerfile) - see the README.
 

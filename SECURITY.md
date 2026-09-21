@@ -19,6 +19,10 @@ Security fixes are made against the latest released version.
   has the privileges the API should have. The read-only guard is defence in depth, not a substitute for grants.
 - Keep credentials out of `db_connections.json`: use `"password": "${ENV_VAR}"` references.
 - Do not enable `SQL2API_DEBUG` on a reachable host.
+- Set `SQL2API_RATE_LIMIT` on anything reachable beyond a trusted network; it also throttles API key guessing.
+- Behind a reverse proxy, set `SQL2API_TRUST_PROXY` to the number of proxies so limits apply per real client - and
+  leave it at `0` when clients connect directly, otherwise they can forge `X-Forwarded-For` to evade the limit.
+- Only enable `SQL2API_CORS_ORIGINS` for sites you control, and never `*` without an API key.
 - Keep the query time limit (`SQL2API_QUERY_TIMEOUT`, 30 seconds by default) and `SQL2API_MAX_PAGE_SIZE` so one
   expensive request cannot monopolise the service; setting the timeout to `0` removes that protection.
 - Prefer bound `:name` parameters over `{name}` text placeholders.
