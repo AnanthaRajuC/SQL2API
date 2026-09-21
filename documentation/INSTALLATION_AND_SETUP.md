@@ -67,13 +67,15 @@ connection files are protected by an in-process lock) and several threads, behin
 
 ~~~bash
 pip install "sql2api[server]"
-SQL2API_API_KEY=change-me gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 8 "sql2api.app:create_app()"
+SQL2API_API_KEY=change-me gunicorn --bind 127.0.0.1:5000 --workers 1 --threads 8 --timeout 120 "sql2api.app:create_app()"
 ~~~
 
 Behind a reverse proxy or load balancer, also set `SQL2API_TRUST_PROXY=1` (the number of proxies) so rate limits and
 redirects use the real client address and scheme.
 
-Or use the [Dockerfile](../Dockerfile) - see the README.
+Or use the published Docker image (`ghcr.io/anantharajuc/sql2api`, with a `-h2` variant that includes Java) or the
+[Dockerfile](../Dockerfile) - see the README. The image sets gunicorn's worker timeout to 120 seconds; keep it above
+`SQL2API_QUERY_TIMEOUT` if you run your own gunicorn.
 
 ## Verify
 

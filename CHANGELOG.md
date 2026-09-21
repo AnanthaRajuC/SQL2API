@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Docker images are published to GitHub Container Registry on every release (`ghcr.io/anantharajuc/sql2api`, tags
+  `X.Y.Z` and `latest`, plus `-h2` variants with Java and the H2 driver), for `linux/amd64` and `linux/arm64`. The
+  workflow tests each image before publishing and can be run by hand as a dry run.
+- `docker compose up --build` starts a self-contained demo: SQL2API in front of a seeded PostgreSQL database, with
+  example saved queries, an API key and a rate limit. CI runs it on every change.
+- The image has a `HEALTHCHECK` on `/health`, OCI labels, and access logging.
 - Parameter rules for saved queries: besides a type, `query_parameters` can declare `default`, `required`, `enum`,
   `min`/`max`, `min_length`/`max_length`, `pattern` and `description`. Violations are rejected with a 400 that lists
   every problem in an `errors` map; optional parameters without a value are bound as NULL.
@@ -28,6 +34,8 @@ All notable changes to this project are documented here. The format follows
 - Requests rejected by parameter validation are not recorded in `execution_history`.
 
 ### Fixed
+- The Docker image ran gunicorn with its default 30 second worker timeout, the same as the default query time limit,
+  so a query hitting its limit raced gunicorn killing the worker. The timeout is now 120 seconds.
 - The OpenAPI document was not valid OpenAPI 3.0 (`exclusiveMinimum: 0` and empty `required` lists), which strict
   tools and client generators reject. It is now validated in the test suite.
 
