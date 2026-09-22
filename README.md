@@ -72,7 +72,8 @@ curl -X POST 'http://127.0.0.1:5000/execute_sql?page_size=3' -H 'Content-Type: a
      -d '{"sql": "SELECT * FROM actor WHERE actor_id > :min", "params": {"min": 10}, "connection_name": "sakila-sqlite"}'
 ~~~
 
-Open <http://127.0.0.1:5000/docs> for the interactive API reference.
+Open <http://127.0.0.1:5000/docs> for the interactive API reference, or <http://127.0.0.1:5000/ui> for a small
+admin UI to manage connections and saved queries and run ad-hoc SQL without leaving the browser.
 
 For your own databases, run `sql2api init` in an empty folder: it creates `db_connections.json` (inactive templates for
 every supported database) and `saved_sql/`. Edit the file, set `"active": true`, and start the server there.
@@ -199,6 +200,7 @@ Clean up with `docker compose down -v`.
 | `/connections` | GET, PATCH | List (passwords masked) / add / update connections. |
 | `/connections/<name>` | DELETE | Remove a connection. |
 | `/health`, `/docs`, `/openapi.json` | GET | Liveness, Swagger UI, OpenAPI spec. |
+| `/ui` | GET | A small admin UI: manage connections and saved queries, run ad-hoc SQL. |
 
 Full details are in [documentation/API.md](documentation/API.md).
 

@@ -5,7 +5,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- A small admin UI at `/ui`: manage connections and saved queries, and run ad-hoc SQL, without leaving the
+  browser. Self-contained (no build step, no external script or stylesheet) and a pure client of the
+  existing JSON API - no new server-side logic. Linked from `/docs`, and shares its `X-API-Key` storage
+  with the docs page. Query results are always rendered through DOM APIs, never `innerHTML`, so a value
+  coming back from a database can never execute as markup - verified with a real, XSS-payload browser test.
+
 ### Fixed
+- `GET /list_files` returned 404 ("Folder not found") on a brand-new install before anything had ever been
+  saved, instead of an empty list - inconsistent with the very similar `latest_versions()` used for the
+  OpenAPI catalogue, which already handled this correctly. A list endpoint with nothing to list now
+  answers `{"files": []}` with 200, as it always should have.
 - **Security hardening (MySQL/ClickHouse):** the single-statement/read-only SQL guard now reads string
   literals with the quoting rules the *target database* actually uses. MySQL and ClickHouse honour a
   backslash escape inside `'...'`/`"..."` string literals by default; PostgreSQL, SQLite and H2 do not.

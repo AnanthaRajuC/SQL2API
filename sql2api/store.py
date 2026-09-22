@@ -245,10 +245,14 @@ def latest_versions():
 
 
 def list_saved():
-    """Return every saved query with its versions' metadata (SQL text is not included)."""
+    """Return every saved query with its versions' metadata (SQL text is not included).
+
+    A saved_sql folder that does not exist yet (nothing has ever been saved) is an empty list, not an
+    error - consistent with latest_versions() above and with how a list endpoint should behave.
+    """
     saved_dir = str(config.saved_sql_dir())
     if not os.path.isdir(saved_dir):
-        raise ApiError('Folder not found', 404)
+        return []
     files = []
     for filename in os.listdir(saved_dir):
         file_path = os.path.join(saved_dir, filename)
