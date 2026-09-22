@@ -40,20 +40,20 @@ def _connect_args(details, **renames):
     return args
 
 
-def _prepare(sql, params, style, limit, offset):
+def _prepare(sql, params, style, limit, offset, dialect):
     """Return (sql, args, sliced) - the statement to send, its bound arguments and whether the
     database already applied the requested window (LIMIT/OFFSET) for us."""
     window = limit + 1
-    if is_paginated(sql):
+    if is_paginated(sql, dialect):
         sql, sliced = paginate(sql, window, offset), True
     else:
         sliced = False
-    sql, args = bind_parameters(sql, params or {}, style)
+    sql, args = bind_parameters(sql, params or {}, style, dialect)
     return sql, args, sliced
 
 
-def _fetch_page(cursor, sql, params, style, limit, offset):
-    sql, args, sliced = _prepare(sql, params, style, limit, offset)
+def _fetch_page(cursor, sql, params, style, limit, offset, dialect):
+    sql, args, sliced = _prepare(sql, params, style, limit, offset, dialect)
     if args is None:
         cursor.execute(sql)
     else:
@@ -70,6 +70,8 @@ def _fetch_page(cursor, sql, params, style, limit, offset):
 
 class _Driver:
     """How to connect to, check, reset, query and close one kind of database."""
+
+    DIALECT = None  # the connection's `db` value; used to pick the right literal-quoting rules
 
     def connect(self, details, read_only):
         raise NotImplementedError
@@ -93,6 +95,8 @@ _MYSQL_TIMEOUT_ERRNOS = (3024, 1969)
 
 
 class _MySQL(_Driver):
+    DIALECT = 'mysql'
+
     def connect(self, details, read_only):
         import mysql.connector
         conn = mysql.connector.connect(connection_timeout=config.CONNECT_TIMEOUT, **_connect_args(details))
@@ -131,7 +135,7 @@ class _MySQL(_Driver):
                                     'max_statement_time; the query time limit is not enforced')
                 session.state['timeout'] = timeout
             try:
-                result = _fetch_page(cursor, sql, params, 'format', limit, offset)
+                result = _fetch_page(cursor, sql, params, 'format', limit, offset, self.DIALECT)
             except mysql.connector.Error as error:
                 if getattr(error, 'errno', None) in _MYSQL_TIMEOUT_ERRNOS:
                     raise _timed_out(timeout) from None
@@ -144,6 +148,8 @@ class _MySQL(_Driver):
 
 
 class _Postgres(_Driver):
+    DIALECT = 'postgres'
+
     def connect(self, details, read_only):
         import psycopg2
         conn = psycopg2.connect(connect_timeout=config.CONNECT_TIMEOUT, **_connect_args(details, database='dbname'))
@@ -173,7 +179,7 @@ class _Postgres(_Driver):
                 # LOCAL scopes the limit to this transaction, so nothing leaks to the connection's next user
                 cursor.execute(f'SET LOCAL statement_timeout = {_millis(timeout)}')
             try:
-                result = _fetch_page(cursor, sql, params, 'format', limit, offset)
+                result = _fetch_page(cursor, sql, params, 'format', limit, offset, self.DIALECT)
             except psycopg2.errors.QueryCanceled:
                 raise _timed_out(timeout) from None
         if not read_only:
@@ -185,6 +191,8 @@ _CLICKHOUSE_TIMEOUT_EXCEEDED = 159
 
 
 class _ClickHouse(_Driver):
+    DIALECT = 'clickhouse'
+
     # The native-protocol Client pings before each query and reconnects by itself, so it needs no
     # is_alive check, and every setting is sent per query, so there is no session state to reset.
     def connect(self, details, read_only):
@@ -201,7 +209,7 @@ class _ClickHouse(_Driver):
 
     def query(self, session, sql, params, limit, offset, read_only, timeout):
         from clickhouse_driver.errors import ServerException
-        sql, args, sliced = _prepare(sql, params, 'pyformat', limit, offset)
+        sql, args, sliced = _prepare(sql, params, 'pyformat', limit, offset, self.DIALECT)
         settings = {}
         if timeout:
             settings['max_execution_time'] = math.ceil(timeout)  # whole seconds
@@ -233,6 +241,7 @@ def _attach_thread_as_daemon():
 
 
 class _H2(_Driver):
+    DIALECT = 'h2'
     _exit_hook_registered = False
 
     def connect(self, details, read_only):
@@ -275,7 +284,7 @@ class _H2(_Driver):
             cursor.execute(f'SET QUERY_TIMEOUT {_millis(timeout) if timeout else 0}')
             session.state['timeout'] = timeout
         try:
-            result = _fetch_page(cursor, sql, params, 'qmark', limit, offset)
+            result = _fetch_page(cursor, sql, params, 'qmark', limit, offset, self.DIALECT)
         except jaydebeapi.Error as error:
             # H2: "Statement was canceled or the session timed out" (error 57014 / 90051)
             if timeout and any(word in str(error).lower() for word in ('canceled', 'timed out')):
@@ -333,7 +342,7 @@ def _run_sqlite(details, sql, params, limit, offset, read_only, timeout=None, po
             conn.set_progress_handler(check_deadline, 10000)  # called every 10 000 VM instructions
         cursor = conn.cursor()
         try:
-            result = _fetch_page(cursor, sql, params, 'qmark', limit, offset)
+            result = _fetch_page(cursor, sql, params, 'qmark', limit, offset, 'sqlite')
         except sqlite3.OperationalError:
             if expired:
                 raise _timed_out(timeout) from None

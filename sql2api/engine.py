@@ -15,7 +15,7 @@ log = logging.getLogger('sql2api')
 def execute_sql(sql, connection_name, limit, offset, params=None, timeout=None):
     """Run ``sql`` on a named connection and return the requested page as a ResultSetDTO."""
     details = store.get_connection(connection_name)
-    sql = validate_sql(sql)
+    sql = validate_sql(sql, dialect=details['db'])
     log.info('Executing on %s (%s), limit=%s offset=%s timeout=%s: %s',
              connection_name, details['db'], limit, offset, timeout, sql)
     try:

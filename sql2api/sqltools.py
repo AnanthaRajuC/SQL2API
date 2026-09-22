@@ -6,10 +6,28 @@ from . import config
 from .errors import ApiError
 
 # Quoted strings, quoted identifiers and comments - text inside these is never inspected.
-_LITERAL = r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|`[^`]*`|--[^\n]*|/\*.*?\*/"
-_LITERALS_RE = re.compile(_LITERAL, re.S)
-# A ":name" marker, skipping literals and Postgres "::" casts.
-_PARAM_RE = re.compile(rf'(?P<skip>{_LITERAL}|::)|:(?P<name>[A-Za-z_]\w*)', re.S)
+#
+# Two variants exist because MySQL and ClickHouse honour a C-style backslash escape inside '...' and "..."
+# string literals by default (\' does not close the string), while PostgreSQL, SQLite and H2 do not (under
+# their standard/default settings, a quote only escapes via doubling, '' or ""). Using the doubling-only
+# rule for a backslash-honouring database under-counts how long a string stays open: a value ending in an
+# odd number of backslashes before a quote can make that database treat what we consider "outside the
+# string" as still inside it, or vice versa, letting a semicolon or a second statement hide from this
+# guard's semicolon check while the database executes it as separate, live SQL. This was verified against
+# real MySQL and ClickHouse servers, see tests/test_sql_guard_fuzz.py. `--` comments also require the
+# character after `--` to be whitespace or end of input, matching real SQL comment syntax; a bare `--x`
+# is not a comment to any of our dialects and must stay visible to this guard.
+_COMMENT = r'--(?=[ \t\n]|\Z)[^\n]*|/\*.*?\*/'
+_ANSI_LITERAL = rf"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|`(?:[^`]|``)*`|{_COMMENT}"
+_BACKSLASH_LITERAL = rf"'(?:[^'\\]|\\.|'')*'|\"(?:[^\"\\]|\\.|\"\")*\"|`(?:[^`]|``)*`|{_COMMENT}"
+_ANSI_LITERALS_RE = re.compile(_ANSI_LITERAL, re.S)
+_BACKSLASH_LITERALS_RE = re.compile(_BACKSLASH_LITERAL, re.S)
+# Dialects whose string literals honour backslash escapes (\') by default - see the comment above.
+BACKSLASH_ESCAPE_DIALECTS = frozenset({'mysql', 'clickhouse'})
+# A ":name" marker, skipping literals and Postgres "::" casts. Built per dialect for the same reason.
+_PARAM_DIALECT_LITERALS = ((None, _ANSI_LITERAL), *((d, _BACKSLASH_LITERAL) for d in BACKSLASH_ESCAPE_DIALECTS))
+_PARAM_RE = {dialect: re.compile(rf'(?P<skip>{literal}|::)|:(?P<name>[A-Za-z_]\w*)', re.S)
+            for dialect, literal in _PARAM_DIALECT_LITERALS}
 _BRACE_RE = re.compile(r'\{(\w+)\}')
 _TRAILING_LIMIT_RE = re.compile(r'\s+LIMIT\s+\d+(?:\s*,\s*\d+|\s+OFFSET\s+\d+)?\s*$', re.I)
 _SAFE_TEXT_RE = re.compile(r'^[\w\s.,:@%+/\-]*$')
@@ -18,24 +36,36 @@ READ_ONLY_STATEMENTS = ('select', 'with', 'show', 'describe', 'desc', 'explain',
 PAGINATED_STATEMENTS = ('select', 'with')
 
 
-def first_keyword(sql):
-    match = re.match(r'[\s(]*([A-Za-z]+)', _LITERALS_RE.sub(' ', sql))
+def _literals_re(dialect):
+    return _BACKSLASH_LITERALS_RE if dialect in BACKSLASH_ESCAPE_DIALECTS else _ANSI_LITERALS_RE
+
+
+def _param_re(dialect):
+    return _PARAM_RE[dialect] if dialect in _PARAM_RE else _PARAM_RE[None]
+
+
+def first_keyword(sql, dialect=None):
+    match = re.match(r'[\s(]*([A-Za-z]+)', _literals_re(dialect).sub(' ', sql))
     return match.group(1).lower() if match else ''
 
 
-def is_paginated(sql):
-    return first_keyword(sql) in PAGINATED_STATEMENTS
+def is_paginated(sql, dialect=None):
+    return first_keyword(sql, dialect) in PAGINATED_STATEMENTS
 
 
-def validate_sql(sql):
-    """Normalise a client-supplied statement and enforce the single-statement/read-only rules."""
+def validate_sql(sql, dialect=None):
+    """Normalise a client-supplied statement and enforce the single-statement/read-only rules.
+
+    ``dialect`` should be the target connection's ``db`` value, so literals are read with the rules that
+    database actually applies (see the module docstring above _ANSI_LITERAL).
+    """
     if not isinstance(sql, str) or not sql.strip():
         raise ApiError('SQL query is missing')
     sql = re.sub(r'[\s;]+$', '', sql.strip())
-    if ';' in _LITERALS_RE.sub(' ', sql):
+    if ';' in _literals_re(dialect).sub(' ', sql):
         raise ApiError('Only a single SQL statement can be executed at a time')
     if not config.allow_writes():
-        if first_keyword(sql) not in READ_ONLY_STATEMENTS or '/*!' in sql:
+        if first_keyword(sql, dialect) not in READ_ONLY_STATEMENTS or '/*!' in sql:
             raise ApiError('Only read-only statements (SELECT, WITH, SHOW, DESCRIBE, EXPLAIN) are allowed. '
                            'Set SQL2API_ALLOW_WRITES=1 to lift this restriction.', 403)
     return sql
@@ -89,27 +119,35 @@ def fill_placeholders(sql, values):
     return sql
 
 
-def named_parameters(sql):
+def named_parameters(sql, dialect=None):
     """Names of the ``:name`` bound parameters used by ``sql``, in order of appearance."""
-    return [m.group('name') for m in _PARAM_RE.finditer(sql) if m.group('name')]
+    return [m.group('name') for m in _param_re(dialect).finditer(sql) if m.group('name')]
 
 
-def placeholder_names(sql):
-    """Every parameter name ``sql`` uses - bound ``:name`` first, then ``{name}`` text placeholders - once each."""
-    return list(dict.fromkeys(named_parameters(sql) + _BRACE_RE.findall(sql)))
+def placeholder_names(sql, dialect=None):
+    """Every parameter name ``sql`` uses - bound ``:name`` first, then ``{name}`` text placeholders - once each.
+
+    app.py calls this without a dialect (bookkeeping: which declared parameters need a value, and the
+    OpenAPI catalogue) even where a connection - and so a dialect - is known, because getting the dialect
+    wrong here can only make that bookkeeping slightly inaccurate in a rare, contrived edge case; it never
+    affects what SQL is actually sent to a database. The SQL that is actually executed always goes through
+    engine.execute_sql -> validate_sql and runners.py's bind_parameters, both of which do receive the
+    connection's real dialect. See the module docstring above _ANSI_LITERAL for why the dialect matters.
+    """
+    return list(dict.fromkeys(named_parameters(sql, dialect) + _BRACE_RE.findall(sql)))
 
 
 _MARKERS = {'qmark': lambda name: '?', 'format': lambda name: '%s', 'pyformat': lambda name: f'%({name})s'}
 
 
-def bind_parameters(sql, params, style):
+def bind_parameters(sql, params, style, dialect=None):
     """Rewrite ``:name`` markers into a driver's paramstyle and return ``(sql, args)``.
 
     ``style`` is 'qmark' (``?``, positional), 'format' (``%s``, positional) or 'pyformat'
     (``%(name)s``, mapping). Values never become part of the SQL text. Returns ``(sql, None)``
     when the statement has no parameters, so drivers do not apply ``%`` formatting to it.
     """
-    matches = [m for m in _PARAM_RE.finditer(sql) if m.group('name')]
+    matches = [m for m in _param_re(dialect).finditer(sql) if m.group('name')]
     if not matches:
         return sql, None
     names = [m.group('name') for m in matches]

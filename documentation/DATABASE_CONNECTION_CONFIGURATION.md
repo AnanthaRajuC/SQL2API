@@ -34,6 +34,10 @@ The file is re-read on every request, so edits take effect without a restart, an
 | `sqlite` | `sqlite3` | Opened with `mode=ro` unless writes are enabled |
 | `h2` | `JayDeBeApi` + bundled JDBC jar | Connects to a running H2 TCP server: `jdbc:h2:tcp://<host>[:port]/~/<database>` |
 
+The SQL guard (single-statement / read-only check, see [API.md](API.md)) reads string literals using the quoting
+rules the connection's `db` type actually uses: `mysql` and `clickhouse` honour a backslash escape inside quoted
+strings by default, the others do not, and using the wrong rule for a value can misjudge where a statement ends.
+
 ## Query time limit
 
 `SQL2API_QUERY_TIMEOUT` (default 30 seconds) is enforced by each database itself, so the statement is genuinely

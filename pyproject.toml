@@ -29,7 +29,7 @@ clickhouse = ["clickhouse-driver>=0.2"]
 h2 = ["JayDeBeApi>=1.2", "JPype1>=1.4"]  # also needs a Java runtime
 all = ["sql2api[mysql,postgres,clickhouse,h2]"]
 server = ["gunicorn>=21"]
-dev = ["sql2api[all]", "ruff>=0.5", "openapi-spec-validator>=0.7"]
+dev = ["sql2api[all]", "ruff>=0.5", "openapi-spec-validator>=0.7", "hypothesis>=6.100"]
 
 [project.urls]
 Homepage = "https://github.com/AnanthaRajuC/SQL2API"
