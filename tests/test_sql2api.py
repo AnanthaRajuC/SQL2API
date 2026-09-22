@@ -165,6 +165,13 @@ class ReadOnlyTests(ApiTestCase):
 
 
 class SavedQueryTests(ApiTestCase):
+    def test_list_files_on_a_fresh_install_is_an_empty_list_not_an_error(self):
+        # saved_dir does not exist yet in a brand-new SQL2API_HOME (nothing has ever been saved) -
+        # a list endpoint should answer with an empty list, not a 404.
+        self.assertFalse(os.path.isdir(self.saved_dir))
+        res = self.client.get('/list_files')
+        self.assertEqual((res.status_code, res.get_json()), (200, {'files': []}))
+
     def test_save_versions_and_list(self):
         first = self.save('my query')
         self.assertEqual(first.status_code, 200)
@@ -803,6 +810,25 @@ class SavedQueryOpenApiTests(ApiTestCase):
         page = self.client.get('/docs').get_data(as_text=True)
         self.assertIn('X-API-Key', page)
         self.assertIn('sessionStorage', page)
+        self.assertIn('href="ui"', page)  # links to the admin UI
+
+    def test_admin_ui_is_served_and_public_even_with_an_api_key_set(self):
+        os.environ['SQL2API_API_KEY'] = 'k3y'
+        res = self.client.get('/ui')
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.mimetype, 'text/html')
+        page = res.get_data(as_text=True)
+        # loading the page itself needs no key; the API calls it makes are still gated as normal
+        for marker in ('id="tabs"', 'id="connections-table"', 'id="queries-table"', 'id="run-form"',
+                      'sessionStorage', 'href="docs"'):
+            self.assertIn(marker, page, marker)
+
+    def test_admin_ui_never_assigns_innerhtml(self):
+        # the DOM-builder helper (h()) is the only place server response data is turned into elements;
+        # assigning .innerHTML anywhere would bypass that and risk rendering a cell's content as markup
+        # (the script's own comments mention the word "innerHTML" while explaining this, hence the regex)
+        page = self.client.get('/ui').get_data(as_text=True)
+        self.assertNotRegex(page, r'\.innerHTML\s*=')
 
 
 class ParameterTests(ApiTestCase):

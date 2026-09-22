@@ -8,7 +8,7 @@ from flask.json.provider import DefaultJSONProvider
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import config, cors, engine, openapi, pool, sqltools, store
+from . import config, cors, engine, openapi, pool, sqltools, store, ui
 from . import params as param_rules
 from .errors import ApiError
 from .formats import FORMATTERS, json_default
@@ -19,7 +19,7 @@ bp = Blueprint('api', __name__)
 
 # Query-string arguments that control a request rather than supplying query parameters.
 RESERVED_ARGS = {'format', 'page', 'page_size', 'connection_name', 'version', 'timeout'}
-PUBLIC_ENDPOINTS = {'api.index', 'api.favicon', 'api.health', 'api.docs', 'api.openapi_spec'}
+PUBLIC_ENDPOINTS = {'api.index', 'api.favicon', 'api.health', 'api.docs', 'api.openapi_spec', 'api.admin_ui'}
 RATE_LIMIT_EXEMPT = {'api.health'}  # so monitoring keeps working while a client is being throttled
 
 
@@ -391,3 +391,8 @@ def openapi_spec():
 @bp.route('/docs', methods=['GET'])
 def docs():
     return Response(openapi.DOCS_HTML, mimetype='text/html')
+
+
+@bp.route('/ui', methods=['GET'])
+def admin_ui():
+    return Response(ui.UI_HTML, mimetype='text/html')

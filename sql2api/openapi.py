@@ -196,6 +196,7 @@ DOCS_HTML = """<!doctype html>
 </style></head>
 <body>
 <div id="key-bar">
+  <a href="ui">Admin UI</a> &middot;
   API key (only needed if the server sets SQL2API_API_KEY; it reveals your saved queries below and is
   sent with "Try it out" requests; kept for this browser tab only):
   <input id="key" type="password" autocomplete="off" placeholder="X-API-Key">

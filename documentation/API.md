@@ -199,6 +199,14 @@ Both are off unless the server enables them (`SQL2API_RATE_LIMIT`, `SQL2API_CORS
   `Retry-After` to the page's JavaScript. Allowed methods are `GET, POST, PATCH, DELETE, OPTIONS`; allowed request
   headers are `Content-Type` and `X-API-Key`. Credentials (cookies) are not used.
 
+## Admin UI
+
+`/ui` is a small, self-contained admin page (no build step, no external dependency) for managing
+connections and saved queries and running ad-hoc SQL - a client of the API above, adding no server-side
+logic of its own. Loading the page needs no API key; the requests it makes are gated exactly like any
+other client. It shares its API-key storage with `/docs` (the same browser-tab-only `sessionStorage`
+entry), so entering the key on one page covers both.
+
 ## Interactive documentation
 
 `/docs` (Swagger UI, backed by `/openapi.json`) documents the generic API and also lists **every saved query as its own

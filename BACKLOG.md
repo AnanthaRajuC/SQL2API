@@ -60,13 +60,15 @@ the execution-history recording and the read-only guard.
 
 ## 7. Admin UI
 
-**Impact:** the biggest lever for adoption and day-to-day usability - connections, saved queries and
-execution history are all managed via raw JSON today. Not required for a production deployment to be
-*safe*, but likely the single biggest lever for people actually *choosing* to use it.
-**Notes:** scope as a thin static HTML/JS page (no build step, same spirit as the existing `/docs` page)
-that calls the existing JSON API - no new backend logic required for v1. Needs its own care around
-rendering query results safely (never render a cell's content as HTML) and reuses the
-API-key-in-`sessionStorage` pattern the Swagger docs page already uses.
+**Status: v1 shipped** - `/ui` (connections CRUD, saved-query CRUD/run, ad-hoc SQL runner), as a thin
+client of the existing JSON API with no new backend logic, verified with a real-browser test including an
+XSS-payload check. Still open, roughly in order:
+- Per-version delete for saved queries (the UI only offers deleting a whole query today; the API already
+  supports `?version=`).
+- Execution history view for a saved query.
+- Schema browser integration once backlog item #5 exists.
+- A nicer SQL editor (syntax highlighting) instead of a plain `<textarea>`.
+- Pagination controls beyond a single "next page" link (jump to page N, page-size presets).
 
 ## 8. Client SDKs generated from the OpenAPI spec
 
