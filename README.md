@@ -212,6 +212,7 @@ python -m unittest discover -s tests -t .
 
 The integration tests in `tests/test_integration.py` run against real MySQL, PostgreSQL, ClickHouse and H2 servers when
 the matching `SQL2API_IT_*` variables are set, and are skipped otherwise; CI runs them against service containers.
+`tests/test_sql_guard_fuzz.py` fuzzes the SQL guard and parameter binder with [Hypothesis](https://hypothesis.readthedocs.io/).
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the pull request process, and [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Third-party components

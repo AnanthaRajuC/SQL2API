@@ -5,6 +5,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Security hardening (MySQL/ClickHouse):** the single-statement/read-only SQL guard now reads string
+  literals with the quoting rules the *target database* actually uses. MySQL and ClickHouse honour a
+  backslash escape inside `'...'`/`"..."` string literals by default; PostgreSQL, SQLite and H2 do not.
+  The guard previously used one, doubling-only rule for every database. For MySQL/ClickHouse connections,
+  a crafted value (ending in an escaped quote, more text, then a closing quote) could make the guard
+  think a `;` was safely inside a string literal when the database would treat it as a live, second
+  statement - confirmed against real MySQL and ClickHouse servers. No path to unauthorized data access or
+  modification was found on the current codebase (this project's runners never call `cursor.nextset()`,
+  so on MySQL the smuggled statement was queued but never pulled, and MySQL's own read-only-transaction
+  mode - already set on every read-only connection - independently rejects a smuggled write; ClickHouse's
+  server independently refuses multi-statement queries outright) - but it was a real gap in an explicitly
+  documented guarantee and is now fixed with a dialect-aware guard, covered by a fuzz/property test suite
+  (`tests/test_sql_guard_fuzz.py`, using [Hypothesis](https://hypothesis.readthedocs.io/)) that pins the
+  exact confirmed payload and its outcome on each database. `--` comments now also require a following
+  whitespace character or end of input, matching real SQL comment syntax, and backtick-identifier doubling
+  (`` `` ``) is now recognised - both changes only make the guard *more* likely to reject ambiguous input,
+  never less.
+
 ## [0.3.0] - 2026-09-21
 
 ### Added

@@ -94,4 +94,5 @@ python -m unittest discover -s tests -t .
 
 Integration tests against real databases are enabled by setting `SQL2API_IT_POSTGRES`, `SQL2API_IT_MYSQL`,
 `SQL2API_IT_CLICKHOUSE` and/or `SQL2API_IT_H2` to a JSON connection object - see the header of
-`tests/test_integration.py`.
+`tests/test_integration.py`. `tests/test_sql_guard_fuzz.py` fuzzes the SQL guard and parameter binder with
+[Hypothesis](https://hypothesis.readthedocs.io/) and always runs as part of the suite above.
