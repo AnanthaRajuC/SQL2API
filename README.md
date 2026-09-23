@@ -201,6 +201,7 @@ Clean up with `docker compose down -v`.
 | `/execute_sql_from_file`, `/execute_sql_with_parameters_from_file` | POST | Run a saved query by `filepath` (same as `/q/<name>`). |
 | `/connections` | GET, PATCH | List (passwords masked) / add / update connections. |
 | `/connections/<name>` | DELETE | Remove a connection. |
+| `/connections/<name>/schema` | GET | List its tables/views and their columns. |
 | `/health`, `/docs`, `/openapi.json` | GET | Liveness, Swagger UI, OpenAPI spec. |
 | `/ui` | GET | A small admin UI: manage connections and saved queries, run ad-hoc SQL. |
 

@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `GET /connections/<name>/schema` lists a connection's tables and views with their columns (name, type,
+  nullability, position) - self-service query writing without leaving the API. One catalogue query per
+  database (`information_schema` for MySQL/PostgreSQL/H2, `system.tables`/`system.columns` for ClickHouse,
+  `sqlite_master`/`pragma_table_info` for SQLite), run through the normal read-only execution pipeline, so
+  it needs no new driver logic. Capped at 5000 columns per connection (`truncated: true` if a schema is
+  larger than that).
 - A small admin UI at `/ui`: manage connections (including proper password-mask round-tripping) and saved
   queries (create, run, per-version delete, an execution-history view per version), and run ad-hoc SQL with
   a syntax-highlighted editor, page-size presets and Next/Previous paging - without leaving the browser.

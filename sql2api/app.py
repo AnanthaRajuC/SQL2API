@@ -8,7 +8,7 @@ from flask.json.provider import DefaultJSONProvider
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from . import config, cors, engine, openapi, pool, sqltools, store, ui
+from . import config, cors, engine, openapi, pool, schema, sqltools, store, ui
 from . import params as param_rules
 from .errors import ApiError
 from .formats import FORMATTERS, json_default
@@ -339,6 +339,11 @@ def delete_connection(name):
     store.delete_connection(name)
     pool.close_pooled_connections()  # a removed connection must not keep serving from idle sockets
     return jsonify({'message': f"Connection '{name}' deleted"}), 200
+
+
+@bp.route('/connections/<name>/schema', methods=['GET'])
+def connection_schema(name):
+    return jsonify(schema.fetch_schema(name)), 200
 
 
 # --------------------------------------------------------------------------------------

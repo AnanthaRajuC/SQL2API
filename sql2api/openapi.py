@@ -2,7 +2,7 @@
 import re
 from urllib.parse import quote
 
-from . import config
+from . import config, schema
 from .params import json_schema
 
 _FORMAT_PARAM = {'name': 'format', 'in': 'query', 'schema': {
@@ -174,6 +174,19 @@ def build_spec(version, saved_queries=None):
                 'summary': 'Delete a connection', 'tags': ['Connections'],
                 'parameters': [{'name': 'name', 'in': 'path', 'required': True, 'schema': {'type': 'string'}}],
                 'responses': {'200': {'description': 'Deleted'}, **_ERRORS}}},
+            '/connections/{name}/schema': {'get': {
+                'summary': "List a connection's tables/views and their columns", 'tags': ['Connections'],
+                'parameters': [{'name': 'name', 'in': 'path', 'required': True, 'schema': {'type': 'string'}}],
+                'responses': {'200': {'description': 'Tables and columns', 'content': {'application/json': {
+                    'schema': {'type': 'object', 'properties': {
+                        'tables': {'type': 'array', 'items': {'type': 'object', 'properties': {
+                            'name': {'type': 'string'}, 'type': {'type': 'string', 'enum': ['table', 'view']},
+                            'columns': {'type': 'array', 'items': {'type': 'object', 'properties': {
+                                'name': {'type': 'string'}, 'type': {'type': 'string'},
+                                'nullable': {'type': 'boolean'}, 'position': {'type': 'integer'}}}}}}},
+                        'truncated': {'type': 'boolean', 'description':
+                            f'True if the schema has more than {schema.ROW_CAP} columns and was cut off.'}}}}}},
+                    **_ERRORS}}},
             '/health': {'get': {'summary': 'Liveness check', 'tags': ['Service'],
                                 'responses': {'200': {'description': 'OK'}}}},
         },

@@ -18,6 +18,7 @@ If the server sets `SQL2API_API_KEY`, send it with every request as `X-API-Key: 
 | [`/view_file_content`](#view-a-saved-query-file) | GET | Raw saved-query file |
 | [`/connections`](#connections) | GET, PATCH | List / add / update connections |
 | [`/connections/<name>`](#connections) | DELETE | Delete a connection |
+| [`/connections/<name>/schema`](#connections) | GET | List a connection's tables/views and their columns |
 | `/health` | GET | `{"status": "ok", "version": "..."}` |
 
 ## Common query parameters
@@ -186,6 +187,23 @@ its stored password.
 
 `DELETE /connections/reporting` removes one. See [DATABASE_CONNECTION_CONFIGURATION.md](DATABASE_CONNECTION_CONFIGURATION.md)
 for the connection fields.
+
+`GET /connections/reporting/schema` lists its tables and views for self-service query writing:
+
+~~~json
+{
+    "tables": [
+        {"name": "orders", "type": "table", "columns": [
+            {"name": "id", "type": "integer", "nullable": false, "position": 1},
+            {"name": "customer_id", "type": "integer", "nullable": false, "position": 2}
+        ]}
+    ],
+    "truncated": false
+}
+~~~
+
+`truncated` is `true` only if the connection has more than 5000 columns across all its tables and views combined,
+in which case the list was cut off.
 
 ## Rate limiting and CORS
 

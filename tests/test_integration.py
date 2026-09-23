@@ -182,6 +182,15 @@ class IntegrationBase:
         res = self.client.get('/q/it_query?id=5')
         self.assertEqual([list(r.values())[0] for r in res.get_json()], ['Item 5'])
 
+    def test_schema_lists_the_table_and_its_columns(self):
+        res = self.client.get('/connections/it/schema')
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
+        tables = {t['name'].lower(): t for t in res.get_json()['tables']}
+        self.assertIn('sql2api_it', tables)
+        self.assertEqual(tables['sql2api_it']['type'], 'table')
+        columns = {c['name'].lower() for c in tables['sql2api_it']['columns']}
+        self.assertEqual(columns, {'id', 'name', 'price', 'added'})
+
 
 class DriverReadOnlyMixin:
     """Databases whose driver enforces read-only sessions should refuse writes even if the SQL guard is bypassed."""

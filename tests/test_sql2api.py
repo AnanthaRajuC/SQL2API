@@ -8,7 +8,7 @@ import time
 import unittest
 from unittest import mock
 
-from sql2api import config, create_app, engine, pool, runners, sqltools
+from sql2api import config, create_app, engine, pool, runners, schema, sqltools
 from sql2api.errors import ApiError
 from sql2api.formats import ResultSetDTO
 
@@ -263,6 +263,49 @@ class ConnectionTests(ApiTestCase):
         for bad in ({}, {'connections': {}}, {'connections': {'x': {'db': 'oracle'}}},
                     {'connections': {'x': 'nope'}}):
             self.assertEqual(self.client.patch('/connections', json=bad).status_code, 400, bad)
+
+
+class SchemaTests(ApiTestCase):
+    def setUp(self):
+        super().setUp()
+        conn = sqlite3.connect(self.db_path)
+        conn.execute('CREATE VIEW young_actor AS SELECT actor_id, name FROM actor WHERE born > "1910"')
+        conn.commit()
+        conn.close()
+
+    def test_lists_tables_and_views_with_their_columns(self):
+        body = self.client.get('/connections/lite/schema').get_json()
+        self.assertEqual(body['truncated'], False)
+        tables = {t['name']: t for t in body['tables']}
+        self.assertEqual(tables['actor']['type'], 'table')
+        self.assertEqual(tables['young_actor']['type'], 'view')
+        columns = {c['name']: c for c in tables['actor']['columns']}
+        self.assertEqual(set(columns), {'actor_id', 'name', 'born'})
+        self.assertEqual(columns['actor_id']['position'], 1)
+        self.assertTrue(columns['actor_id']['nullable'])
+
+    def test_unknown_connection_is_404(self):
+        self.assertEqual(self.client.get('/connections/nope/schema').status_code, 404)
+
+    def test_inactive_connection_is_403(self):
+        self.assertEqual(self.client.get('/connections/off/schema').status_code, 403)
+
+    def test_unreachable_connection_is_500_not_a_crash(self):
+        self.assertEqual(self.client.get('/connections/pg/schema').status_code, 500)
+
+    def test_database_with_no_tables_is_an_empty_list_not_an_error(self):
+        empty_path = os.path.join(self.tmp.name, 'empty.db')
+        sqlite3.connect(empty_path).close()
+        conns = self.client.get('/connections').get_json()['connections']
+        conns['empty'] = {'db': 'sqlite', 'database': empty_path, 'active': True}
+        self.client.patch('/connections', json={'connections': conns})
+        self.assertEqual(self.client.get('/connections/empty/schema').get_json(), {'tables': [], 'truncated': False})
+
+    def test_truncates_when_more_columns_exist_than_the_cap(self):
+        with mock.patch.object(schema, 'ROW_CAP', 2):
+            body = self.client.get('/connections/lite/schema').get_json()
+        self.assertTrue(body['truncated'])
+        self.assertEqual(sum(len(t['columns']) for t in body['tables']), 2)
 
 
 class ApiKeyTests(ApiTestCase):

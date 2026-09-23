@@ -48,9 +48,9 @@ one.
 
 ## 5. Schema browser endpoint
 
-**Impact:** self-service query writing without leaving the API (`GET /connections/<name>/schema` - tables,
-columns, types). Meaningfully improves usability; a workaround already exists (querying
-`information_schema`/equivalent by hand), so this doesn't block adoption on its own.
+**Status: shipped.** `GET /connections/<name>/schema` lists a connection's tables and views with their
+columns (name, type, nullability, position), for every supported database. Verified against real MySQL,
+PostgreSQL, ClickHouse, SQLite and H2 servers, including views and an empty (table-free) database.
 
 ## 6. Response caching
 
@@ -67,7 +67,8 @@ and Next/Previous - all as a thin client of the existing JSON API with no new ba
 a 39-assertion real-browser (Playwright) test covering every feature above plus an XSS-payload check, both
 unauthenticated and with an API key set.
 Still open:
-- Schema browser integration once backlog item #5 exists.
+- Surface the now-shipped schema browser endpoint (#5) in the UI itself, e.g. autocomplete or a table list
+  in the SQL editor.
 
 ## 8. Client SDKs generated from the OpenAPI spec
 
