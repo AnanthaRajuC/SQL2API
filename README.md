@@ -1,6 +1,8 @@
 # SQL2API
 
 [![CI](https://github.com/AnanthaRajuC/SQL2API/actions/workflows/ci.yml/badge.svg)](https://github.com/AnanthaRajuC/SQL2API/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/sql2api.svg)](https://pypi.org/project/sql2api/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/sql2api.svg)](https://pypi.org/project/sql2api/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 
@@ -203,6 +205,22 @@ Clean up with `docker compose down -v`.
 | `/ui` | GET | A small admin UI: manage connections and saved queries, run ad-hoc SQL. |
 
 Full details are in [documentation/API.md](documentation/API.md).
+
+## Client SDKs
+
+`/openapi.json` is a complete, valid OpenAPI 3.0 document (checked in CI against the official validator), so a typed
+client for Java, TypeScript, Go, or [any of the ~50 languages `openapi-generator` supports](https://openapi-generator.tech/docs/generators)
+costs nothing in application code - generate it from the running server's own spec:
+
+~~~bash
+npx @openapitools/openapi-generator-cli generate \
+  -i http://127.0.0.1:5000/openapi.json -g java -o clients/java
+# or: -g typescript-fetch, -g go, -g python, ...
+~~~
+
+This is deliberately not something SQL2API ships pre-generated: the spec already includes every saved query
+as its own typed `/q/<name>` endpoint (see [Quick start](#quick-start) above), so a client generated against
+*your* server reflects *your* saved queries, not a generic snapshot.
 
 ## Development
 
