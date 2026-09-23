@@ -6,11 +6,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- A small admin UI at `/ui`: manage connections and saved queries, and run ad-hoc SQL, without leaving the
-  browser. Self-contained (no build step, no external script or stylesheet) and a pure client of the
-  existing JSON API - no new server-side logic. Linked from `/docs`, and shares its `X-API-Key` storage
-  with the docs page. Query results are always rendered through DOM APIs, never `innerHTML`, so a value
-  coming back from a database can never execute as markup - verified with a real, XSS-payload browser test.
+- A small admin UI at `/ui`: manage connections (including proper password-mask round-tripping) and saved
+  queries (create, run, per-version delete, an execution-history view per version), and run ad-hoc SQL with
+  a syntax-highlighted editor, page-size presets and Next/Previous paging - without leaving the browser.
+  Self-contained (no build step, no external script or stylesheet) and a pure client of the existing JSON
+  API - no new server-side logic. Linked from `/docs`, and shares its `X-API-Key` storage with the docs
+  page. Query results are always rendered through DOM APIs, never `innerHTML`, so a value coming back from
+  a database can never execute as markup - verified with a 39-assertion real-browser (Playwright) test,
+  including an XSS-payload check, run both unauthenticated and with an API key set.
 
 ### Fixed
 - `GET /list_files` returned 404 ("Folder not found") on a brand-new install before anything had ever been
