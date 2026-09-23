@@ -60,15 +60,14 @@ the execution-history recording and the read-only guard.
 
 ## 7. Admin UI
 
-**Status: v1 shipped** - `/ui` (connections CRUD, saved-query CRUD/run, ad-hoc SQL runner), as a thin
-client of the existing JSON API with no new backend logic, verified with a real-browser test including an
-XSS-payload check. Still open, roughly in order:
-- Per-version delete for saved queries (the UI only offers deleting a whole query today; the API already
-  supports `?version=`).
-- Execution history view for a saved query.
+**Status: shipped**, including the follow-ups originally listed here - connections CRUD (with a proper
+password-mask round trip), saved-query CRUD, per-version delete, an execution-history view per version, a
+hand-rolled (no-dependency) syntax-highlighted SQL editor, and an ad-hoc SQL runner with page-size presets
+and Next/Previous - all as a thin client of the existing JSON API with no new backend logic. Verified with
+a 39-assertion real-browser (Playwright) test covering every feature above plus an XSS-payload check, both
+unauthenticated and with an API key set.
+Still open:
 - Schema browser integration once backlog item #5 exists.
-- A nicer SQL editor (syntax highlighting) instead of a plain `<textarea>`.
-- Pagination controls beyond a single "next page" link (jump to page N, page-size presets).
 
 ## 8. Client SDKs generated from the OpenAPI spec
 
