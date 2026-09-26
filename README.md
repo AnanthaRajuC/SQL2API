@@ -674,9 +674,8 @@ In plain terms - the [LICENSE](https://github.com/AnanthaRajuC/QueryAPIGate/blob
 - **You may not** make it available to others in a commercial product or service that substitutes for QueryAPIGate or
   offers the same or substantially similar functionality (for example, selling it, or hosting it as a paid service).
 - **Each version becomes MIT** on the second anniversary of the date it was released, and can then be used under MIT terms.
-- **Versions up to and including 0.6.1** were released under the MIT license and remain available under it (the
-  releases on PyPI: [`queryapigate`](https://pypi.org/project/queryapigate/) 0.5.0-0.6.1 and
-  [`sql2api`](https://pypi.org/project/sql2api/) 0.1.0-0.4.0).
+- **Versions up to and including 0.6.1** were released under the MIT license. They are no longer distributed (and the
+  repository history was reset in 0.7.0), but a copy you already obtained under MIT remains yours under those terms.
 
 Need something the license does not cover, such as offering it as part of a hosted service? Get in touch - commercial
 licensing may be available. This is a summary, not legal advice.

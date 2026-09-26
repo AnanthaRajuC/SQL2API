@@ -14,7 +14,7 @@ All notable changes to this project are documented here. The format follows
   offers substantially similar functionality (so: not selling it, or hosting it as a paid service). Running it inside
   your company, non-commercial education and research, and professional services for a licensee are all permitted.
   Each version becomes MIT on the second anniversary of its release. **Versions 0.4.0 through 0.6.1 were released under
-  MIT and remain available under it.** The code is unchanged in this release; only the license and its metadata are
+  MIT; they are no longer distributed, and a copy already obtained under MIT stays under those terms.** The code is unchanged in this release; only the license and its metadata are
   (`LICENSE`, the package's `License-Expression`, the container image label, the README). Outside code contributions
   are not being accepted for now (CONTRIBUTING.md).
 
@@ -23,7 +23,7 @@ All notable changes to this project are documented here. The format follows
   the licence notices those datasets need). They were never part of the wheel; the repository now has no third-party
   data. Use `queryapigate examples load` for a working sample instead - its data is generated locally. The Docker demo's
   film titles (which came from Sakila) are replaced with generated ones, and the documentation's examples now use the
-  generated `examples` connection (`film` table) instead of the `actor` table. Earlier commits and releases still contain the files.
+  generated `examples` connection (`film` table) instead of the `actor` table. The repository history was also reset to a single commit for this release, so earlier commits and releases are no longer published.
 
 ## [0.6.1] - 2026-09-25
 
@@ -584,10 +584,3 @@ First public release, restructured from the original single-file application.
 
 [Unreleased]: https://github.com/AnanthaRajuC/QueryAPIGate/compare/v0.7.0...HEAD
 [0.7.0]: https://github.com/AnanthaRajuC/QueryAPIGate/releases/tag/v0.7.0
-[0.6.1]: https://pypi.org/project/queryapigate/0.6.1/
-[0.6.0]: https://pypi.org/project/queryapigate/0.6.0/
-[0.5.0]: https://pypi.org/project/queryapigate/0.5.0/
-[0.4.0]: https://pypi.org/project/sql2api/0.4.0/
-[0.3.0]: https://pypi.org/project/sql2api/0.3.0/
-[0.2.0]: https://pypi.org/project/sql2api/0.2.0/
-[0.1.0]: https://pypi.org/project/sql2api/0.1.0/

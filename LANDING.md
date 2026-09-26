@@ -68,4 +68,4 @@ setup guide](documentation/INSTALLATION_AND_SETUP.md).
   feature list, and the output-format support matrix by database.
 - [Roadmap](BACKLOG.md) - what's shipped and what's planned, in priority order.
 - [License](https://github.com/AnanthaRajuC/QueryAPIGate/blob/main/LICENSE) - source-available under FSL-1.1-MIT: free to use,
-  not to resell as a competing product, and each version becomes MIT after two years. Versions up to 0.6.1 are MIT.
+  not to resell as a competing product, and each version becomes MIT after two years. Versions up to 0.6.1 were MIT but are no longer distributed; 0.7.0 onward is FSL-1.1-MIT.

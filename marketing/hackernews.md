@@ -61,7 +61,7 @@ So: you save a query once, it becomes a versioned endpoint, and access is decide
 
 License up front: it is source-available under FSL-1.1-MIT, not open source. You can use it for anything - including
 at work - except offering it to others as a competing product or service. Each release becomes plain MIT two years
-after it ships, and everything up to 0.6.1 was MIT and stays MIT.
+after it ships. Earlier releases (up to 0.6.1) were MIT; I have withdrawn them, so 0.7.0 is the first under this license.
 
     $ queryapigate examples load && queryapigate serve
     $ curl 'http://127.0.0.1:5000/q/example_top_films?top_n=3&category=Comedy'
@@ -107,7 +107,7 @@ the first two hours.
 No, and I say so up front. It is source-available under the Functional Source License (FSL-1.1-MIT): the code is public,
 you can read, run, modify and self-host it for any purpose that is not a competing use, and every release turns into
 MIT two years after it ships. I chose it because I want people to use it freely but not to resell it as a competing
-product or hosted service while I am still building it. Versions up to 0.6.1 were released under MIT and stay MIT.
+product or hosted service while I am still building it. Versions up to 0.6.1 were released under MIT; I have since withdrawn them, so 0.7.0 is the first release under FSL.
 
 **"Why not just use MIT / AGPL?"**
 MIT would let anyone repackage and sell it, which I do not want. AGPL keeps the code open but still allows selling, and
