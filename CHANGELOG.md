@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-26
+
 ### Added
 - **A redesigned admin UI.** The tab bar is now a collapsible left sidebar grouped into Data, Access and Observability
   (`Ctrl`/`Cmd`+`B` toggles it, and the choice is remembered), with a breadcrumb in the top bar. API docs, OpenAPI and
@@ -609,6 +611,7 @@ First public release, restructured from the original single-file application.
 - JSON column order is preserved; Decimal, date and driver-specific number types serialise correctly.
 - Concurrent saves can no longer lose a version.
 
-[Unreleased]: https://github.com/AnanthaRajuC/QueryAPIGate/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/AnanthaRajuC/QueryAPIGate/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/AnanthaRajuC/QueryAPIGate/releases/tag/v0.8.0
 [0.7.1]: https://github.com/AnanthaRajuC/QueryAPIGate/releases/tag/v0.7.1
 [0.7.0]: https://github.com/AnanthaRajuC/QueryAPIGate/releases/tag/v0.7.0
