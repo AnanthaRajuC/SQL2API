@@ -164,3 +164,6 @@ cython_debug/
 /saved_sql/
 *.tmp
 .ruff_cache/
+
+# Launch and marketing material (Hacker News kit, demo-video tooling): kept locally, never part of the product
+/marketing/

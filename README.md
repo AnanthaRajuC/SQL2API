@@ -13,6 +13,12 @@
 
 [**Full documentation**](https://AnanthaRajuC.github.io/QueryAPIGate/)
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=aiVbAkA2LS8">
+    <img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/demo-thumbnail.png" alt="Watch the 60-second demo: saved SQL queries as REST endpoints, scoped API keys, and the Move preview showing which keys gain or lose access" width="640">
+  </a>
+</p>
+
 **QueryAPIGate** is a self-hosted, single Flask service that runs SQL against your databases and returns the results as
 JSON, NDJSON, XML, YAML, CSV, TSV or Excel. Save a query once and it becomes a versioned endpoint with typed,
 injection-safe parameters and run history - without writing a controller, a repository layer, pagination, auth or
