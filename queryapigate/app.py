@@ -76,6 +76,10 @@ def load_examples_at_startup():
         log.warning('QUERYAPIGATE_LOAD_EXAMPLES is set but the examples could not be loaded: %s',
                     getattr(error, 'message', error))
         return
+    except Exception as error:  # a convenience must never take the server down, whatever went wrong
+        log.warning('QUERYAPIGATE_LOAD_EXAMPLES is set but the examples could not be loaded (unexpected error: %s)',
+                    error, exc_info=True)
+        return
     if added['connection'] or added['queries'] or added['roles']:
         store.record_audit('startup', 'load_examples', 'examples', added)
         log.info('Loaded the example APIs: %d queries, %d roles', len(added['queries']), len(added['roles']))

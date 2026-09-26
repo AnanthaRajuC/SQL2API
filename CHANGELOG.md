@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-26
+
+### Fixed
+- **The container crashed at startup with `QUERYAPIGATE_LOAD_EXAMPLES=yes` when its data folder was not writable** (for example
+  a `-v "$PWD/data:/data"` folder that Docker had created, which is owned by root while the container runs as a non-root
+  user). SQLite's own error escaped the examples loader, the worker died and gunicorn kept restarting it. Loading the
+  examples is a convenience, so a failure now only logs a warning saying the folder must be writable, and the server
+  starts; `queryapigate examples load` prints the same message instead of a traceback. The previous test for this mocked
+  the wrong error type; the new ones use a genuinely read-only folder.
+
+### Changed
+- README: the Docker examples now use a named volume (`-v queryapigate-data:/data`), which works without any host
+  permission setup, and explain what a host folder needs (writable by uid 1000).
+
 ## [0.7.0] - 2026-09-26
 
 ### Changed
@@ -582,5 +596,6 @@ First public release, restructured from the original single-file application.
 - JSON column order is preserved; Decimal, date and driver-specific number types serialise correctly.
 - Concurrent saves can no longer lose a version.
 
-[Unreleased]: https://github.com/AnanthaRajuC/QueryAPIGate/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/AnanthaRajuC/QueryAPIGate/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/AnanthaRajuC/QueryAPIGate/releases/tag/v0.7.1
 [0.7.0]: https://github.com/AnanthaRajuC/QueryAPIGate/releases/tag/v0.7.0

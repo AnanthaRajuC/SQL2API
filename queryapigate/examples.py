@@ -19,6 +19,7 @@ walkthrough in ``documentation/EXAMPLES.md`` shows how to create one from the ex
 """
 import os
 import random
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -78,7 +79,6 @@ CREATE INDEX rental_film_idx ON rental(film_id);
 def build_database(path, now=None, seed=42):
     """Create the example SQLite database at ``path`` (which must not exist). Deterministic for a given ``now`` and
     ``seed``. Dates are UTC, to match SQLite's own ``'now'`` that the example queries compare against."""
-    import sqlite3
     rng = random.Random(seed)
     now = now or datetime.now(timezone.utc).replace(tzinfo=None)
     titles = [f'{a} {n}' for a in _ADJECTIVES for n in _NOUNS]
@@ -274,7 +274,11 @@ def load(now=None):
         db_path = config.home() / DB_FILE
         if _marked_connection() is None:
             if not db_path.exists():
-                build_database(str(db_path), now)
+                try:
+                    build_database(str(db_path), now)
+                except sqlite3.Error as error:  # SQLite's own error type - not an OSError, so callers would miss it
+                    raise ApiError(f'Could not create the example database in {config.home()} ({error}). Is the data '
+                                   'folder writable by the user QueryAPIGate runs as?', 500) from None
             store.update_connections({CONNECTION: {'db': 'sqlite', 'database': DB_FILE, 'active': True,
                                                    'example': True}})
             added['connection'] = True

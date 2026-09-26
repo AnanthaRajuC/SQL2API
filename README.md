@@ -556,7 +556,7 @@ instead of it - a request has to pass both. See [Per-key rate limiting](document
 Every release is published to GitHub Container Registry for `linux/amd64` and `linux/arm64`:
 
 ~~~bash
-docker run -p 5000:5000 -v "$PWD/data:/data" -e QUERYAPIGATE_API_KEY=change-me ghcr.io/anantharajuc/queryapigate:latest
+docker run -p 5000:5000 -v queryapigate-data:/data -e QUERYAPIGATE_API_KEY=change-me ghcr.io/anantharajuc/queryapigate:latest
 ~~~
 
 | Tag | Contents |
@@ -565,7 +565,10 @@ docker run -p 5000:5000 -v "$PWD/data:/data" -e QUERYAPIGATE_API_KEY=change-me g
 | `X.Y.Z-h2`, `latest-h2` | The same plus Java and the H2 driver - also the variant to use for a generic `jdbc` connection (mount your vendor's jar) |
 
 The container keeps `db_connections.json` and `saved_sql/` in `/data` (create a starter with
-`docker run --rm -v "$PWD/data:/data" ghcr.io/anantharajuc/queryapigate queryapigate init`). It runs as a non-root user under
+`docker run --rm -v queryapigate-data:/data ghcr.io/anantharajuc/queryapigate queryapigate init`). The named volume above works
+out of the box. To use a folder on the host instead (`-v "$PWD/data:/data"`), create it yourself first (`mkdir data`) and make sure
+it is writable by uid 1000, the container's user - a folder that Docker creates for you is owned by root, which the container
+cannot write to (or run with `--user "$(id -u):$(id -g)"`). It runs as a non-root user under
 gunicorn with one worker (the files are protected by an in-process lock) and a health check on `/health`. Behind a
 reverse proxy or load balancer, set `QUERYAPIGATE_TRUST_PROXY=1`. To build it yourself:
 `docker build -t queryapigate .` (add `--build-arg WITH_H2=true` for H2).

@@ -39,6 +39,14 @@ class ExamplesTestCase(unittest.TestCase):
         store.save_version(name, {'sql_query': 'SELECT 1', 'author': 'me', 'description': 'mine', 'tags': [],
                                   'query_parameters': {}}, collection)
 
+    def make_home_unwritable(self):
+        """A real read-only data folder - what a Docker bind mount created by root looks like to the container's
+        non-root user. (Mocking an OSError would not do: SQLite raises its own error type here.)"""
+        if os.geteuid() == 0:
+            self.skipTest('root ignores directory permissions')
+        os.chmod(self.home, 0o555)
+        self.addCleanup(os.chmod, self.home, 0o755)
+
     def run_cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
@@ -47,6 +55,13 @@ class ExamplesTestCase(unittest.TestCase):
 
 
 class DatabaseTests(ExamplesTestCase):
+    def test_an_unwritable_folder_is_an_apierror_with_a_hint(self):
+        self.make_home_unwritable()
+        with self.assertRaises(ApiError) as caught:
+            examples.load()
+        self.assertEqual(caught.exception.status, 500)
+        self.assertIn('writable', caught.exception.message)
+
     def build(self, **kwargs):
         path = os.path.join(self.home, 'x.db')
         examples.build_database(path, FIXED_NOW, **kwargs)
@@ -450,6 +465,24 @@ class StartupTests(ExamplesTestCase):
         self.assertEqual(app.test_client().get('/health').status_code, 200)
         self.assertEqual(self.saved_files(), ['example_top_films.json'])
 
+    def test_a_really_unwritable_home_is_a_warning_not_a_crash(self):
+        # This crashed the container: examples.load() let SQLite's own OperationalError escape, which the startup hook
+        # (catching only ApiError/OSError) did not handle, so the worker died and gunicorn kept restarting it.
+        self.make_home_unwritable()
+        os.environ['QUERYAPIGATE_LOAD_EXAMPLES'] = 'yes'
+        with self.assertLogs('queryapigate', level='WARNING') as captured:
+            app = create_app()
+        self.assertTrue(any('could not be loaded' in line for line in captured.output), captured.output)
+        self.assertEqual(app.test_client().get('/health').status_code, 200)
+
+    def test_an_unexpected_failure_while_loading_is_still_only_a_warning(self):
+        os.environ['QUERYAPIGATE_LOAD_EXAMPLES'] = 'yes'
+        with mock.patch.object(examples, 'load', side_effect=RuntimeError('something new')):
+            with self.assertLogs('queryapigate', level='WARNING') as captured:
+                app = create_app()
+        self.assertTrue(any('something new' in line for line in captured.output), captured.output)
+        self.assertEqual(app.test_client().get('/health').status_code, 200)
+
     def test_a_read_only_home_is_a_warning_not_a_startup_failure(self):
         os.environ['QUERYAPIGATE_LOAD_EXAMPLES'] = 'yes'
         with mock.patch.object(examples, 'load', side_effect=OSError('read-only file system')):
@@ -488,6 +521,13 @@ class CliTests(ExamplesTestCase):
         apikeys.create_key('partner-key', connections=[], collections=['examples-partner'])
         _, out, _ = self.run_cli('examples', 'unload')
         self.assertIn('partner-key', out)
+
+    def test_an_unwritable_home_is_a_clean_message_not_a_traceback(self):
+        self.make_home_unwritable()
+        code, _, err = self.run_cli('examples', 'load')
+        self.assertEqual(code, 1)
+        self.assertIn('queryapigate examples load:', err)
+        self.assertNotIn('Traceback', err)
 
     def test_bare_command_shows_help_and_a_leftover_old_setting_still_stops_it(self):
         code, out, _ = self.run_cli('examples')
