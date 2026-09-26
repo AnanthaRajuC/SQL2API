@@ -846,6 +846,16 @@ def audit_log_endpoint():
     return jsonify({'entries': list(reversed(store.read_audit_log()))}), 200
 
 
+@bp.route('/settings', methods=['GET'])
+def settings_endpoint():
+    """The server's own configuration as the admin UI's Settings screen shows it: every environment variable
+    that matters, its effective value and whether it was set or is the default. Read-only, and admin only
+    like the rest of what reveals the server's configuration. Secrets are reported as configured or not,
+    never returned."""
+    require_admin()
+    return jsonify({'sections': config.describe_settings()}), 200
+
+
 # --------------------------------------------------------------------------------------
 # Service endpoints
 # --------------------------------------------------------------------------------------

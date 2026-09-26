@@ -400,6 +400,11 @@ def build_spec(version, saved_queries=None):
                 'summary': 'A durable record of administrative changes - API keys, roles, connections and '
                            'saved queries created, changed or removed (admin only)', 'tags': ['API keys'],
                 'responses': {'200': {'description': 'Newest entry first, capped at 500 entries'}, **_ERRORS}}},
+            '/settings': {'get': {
+                'summary': "The server's own configuration: each setting's effective value and whether it comes "
+                           'from the environment or is the default (admin only, read-only; secrets are reported '
+                           'as configured or not, never returned)', 'tags': ['Service'],
+                'responses': {'200': {'description': 'Settings grouped into sections'}, **_ERRORS}}},
             '/catalog': {'get': {
                 'summary': 'Every saved query this caller can reach, and the terms it is offered under',
                 'tags': ['Saved queries'],

@@ -5,6 +5,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **A redesigned admin UI.** The tab bar is now a collapsible left sidebar grouped into Data, Access and Observability
+  (`Ctrl`/`Cmd`+`B` toggles it, and the choice is remembered), with a breadcrumb in the top bar. API docs, OpenAPI and
+  the API key panel live at the foot of the sidebar; every screen has a title with a one-line description; Connections
+  has All / Active / Inactive tabs; and a global search (`Ctrl`/`Cmd`+`K`) jumps to any connection, saved query, API key
+  or role. Metrics shows bar rows instead of charts, the audit log can be exported as JSON, and the first saved query
+  opens by default with only its collection expanded.
+- **A read-only Settings screen** and `GET /settings` (admin only): every environment variable the server reads, its
+  effective value and whether it was set or is the built-in default, with a "Copy as .env" button. A secret (the admin
+  key, the encryption key) is only ever reported as configured or not - never returned, and never copied.
+- **Interface preferences** in Settings: theme (system, light, dark), table density and the default result format. They
+  live in the browser only and are never sent to the server.
+
 ## [0.7.1] - 2026-09-26
 
 ### Fixed

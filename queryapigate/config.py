@@ -278,3 +278,80 @@ def slow_query_threshold():
     if value == 0:
         return None
     return value if value > 0 else DEFAULT_SLOW_QUERY_THRESHOLD
+
+
+def _seconds(value):
+    return None if value is None else f'{value:g} s'
+
+
+def describe_settings():
+    """Every server setting the admin UI's Settings screen shows, grouped: [{id, title, description, rows}].
+
+    Each row is {label, description, env, value, source, env_value}. ``value`` is what to display (secrets are
+    reduced to "configured" / "enabled" - never the secret itself), ``source`` is "env" when the variable is set
+    and "default" when the built-in default applies, and ``env_value`` is the raw value for a "copy as .env"
+    export, or None for a secret so that export can never leak one. Read-only: settings are environment
+    variables, changed by restarting the server, not through the API."""
+    def row(label, description, env, value, secret=False):
+        raw = os.environ.get(env, '').strip()
+        return {'label': label, 'description': description, 'env': env, 'value': value,
+                'source': 'env' if raw else 'default', 'env_value': None if secret or not raw else raw}
+
+    def on_off(flag):
+        return 'on' if flag else 'off'
+
+    stream = stream_max_rows()
+    timeout, slow = query_timeout(), slow_query_threshold()
+    limit, export = rate_limit(), audit_log_export_file()
+    cors = cors_origins()
+    return [
+        {'id': 'general', 'title': 'General',
+         'description': 'Where this server keeps its files and what it loads at startup.', 'rows': [
+            row('Home directory', 'Folder holding db_connections.json, api_keys.json, roles.json and saved_sql/.',
+                'QUERYAPIGATE_HOME', str(home())),
+            row('Load examples', 'Load the example APIs at startup. Idempotent.',
+                'QUERYAPIGATE_LOAD_EXAMPLES', on_off(load_examples())),
+            row('H2 driver', 'JAR used for h2 connections.', 'QUERYAPIGATE_H2_JAR',
+                Path(h2_jar()).name + ('' if os.environ.get('QUERYAPIGATE_H2_JAR') else ' (bundled)'))]},
+        {'id': 'security', 'title': 'Security',
+         'description': 'Admin access, write protection and secrets at rest.', 'rows': [
+            row('Admin API key', 'Key with full access to this UI and the admin API. Unset means open access.',
+                'QUERYAPIGATE_API_KEY', 'configured' if api_key() else 'not set - open access', secret=True),
+            row('Allow writes', 'When off, statements that modify data are rejected.',
+                'QUERYAPIGATE_ALLOW_WRITES', on_off(allow_writes())),
+            row('Encryption at rest', 'Fernet key used to encrypt connection passwords on disk.',
+                'QUERYAPIGATE_SECRET_KEY', 'enabled' if secret_key() else 'off', secret=True),
+            row('Trusted proxy hops', 'Reverse proxies whose X-Forwarded-* headers are trusted.',
+                'QUERYAPIGATE_TRUST_PROXY', str(proxy_hops()))]},
+        {'id': 'execution', 'title': 'Query execution',
+         'description': 'Limits applied to every statement this server runs.', 'rows': [
+            row('Query timeout', 'Server-wide statement limit. A request may ask for less, never more. '
+                '0 disables it.', 'QUERYAPIGATE_QUERY_TIMEOUT', _seconds(timeout) or 'off'),
+            row('Max page size', 'Largest page_size a caller may request.', 'QUERYAPIGATE_MAX_PAGE_SIZE',
+                f'{max_page_size()} rows'),
+            row('Stream row cap', 'Row cap for ?stream=true exports.', 'QUERYAPIGATE_STREAM_MAX_ROWS',
+                'unbounded' if stream is None else f'{stream} rows'),
+            row('Slow query threshold', 'Queries slower than this are logged as warnings. 0 disables it.',
+                'QUERYAPIGATE_SLOW_QUERY_THRESHOLD', _seconds(slow) or 'off')]},
+        {'id': 'pool', 'title': 'Connection pool',
+         'description': 'Idle connections kept open per distinct connection.', 'rows': [
+            row('Pool size', 'Idle connections kept per connection. 0 disables pooling.',
+                'QUERYAPIGATE_POOL_SIZE', str(pool_size())),
+            row('Idle timeout', 'How long an idle pooled connection is kept before it is closed.',
+                'QUERYAPIGATE_POOL_IDLE_TIMEOUT', _seconds(pool_idle_timeout()))]},
+        {'id': 'traffic', 'title': 'Rate limits & CORS',
+         'description': 'Per-client throttling and browser origins allowed to call the API.', 'rows': [
+            row('Rate limit', 'Requests allowed per client. API keys and roles can set their own.',
+                'QUERYAPIGATE_RATE_LIMIT', format_rate_limit(limit) or 'off'),
+            row('CORS origins', 'Comma-separated origins, or * for any. Unset turns CORS off.',
+                'QUERYAPIGATE_CORS_ORIGINS',
+                'off' if cors is None else '*' if cors == '*' else ', '.join(sorted(cors)))]},
+        {'id': 'audit', 'title': 'Audit & logging',
+         'description': 'Retention of administrative actions and log format.', 'rows': [
+            row('Audit log limit', 'Entries kept in audit_log.json.', 'QUERYAPIGATE_AUDIT_LOG_LIMIT',
+                str(audit_log_limit())),
+            row('Audit export file', 'Append-only JSON-lines copy of every audit entry, never rolled off.',
+                'QUERYAPIGATE_AUDIT_LOG_EXPORT_FILE', 'not set' if export is None else str(export)),
+            row('JSON logs', 'One JSON object per line instead of plain text.', 'QUERYAPIGATE_JSON_LOGS',
+                on_off(json_logs()))]},
+    ]

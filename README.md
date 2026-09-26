@@ -281,6 +281,11 @@ version management, API key management, an audit log of administrative changes, 
 response inspection with a collapsible JSON tree for non-tabular results, a quick bar chart of any numeric
 result, and one-click "copy as curl" / "copy as TSV" for any result.
 
+The UI has a collapsible sidebar (Data, Access, Observability; `Ctrl`+`B` toggles it) and a read-only **Settings**
+screen that shows every environment variable, its effective value and whether it was set or is the default (secrets are
+reported as configured or not, never shown), with a "Copy as .env" button. Theme, table density and the default
+result format are per-browser preferences.
+
 ```text
 Connect Database
        |
@@ -606,6 +611,7 @@ Clean up with `docker compose down -v`.
 | `/api_keys` | GET, POST | List / create scoped API keys (admin only). |
 | `/api_keys/<name>` | PATCH, DELETE | Update / revoke a scoped API key (admin only). |
 | `/audit_log` | GET | Durable record of administrative changes - keys, connections, saved queries (admin only). |
+| `/settings` | GET | The server's own configuration - each setting's effective value and whether it comes from the environment or the default; read-only, secrets never returned (admin only). |
 | `/health`, `/docs`, `/openapi.json` | GET | Liveness, Swagger UI, OpenAPI spec. |
 | `/metrics` | GET | Prometheus text-format metrics: request/query counts and latencies, pool occupancy, rate-limit rejections. |
 | `/ui` | GET | A small admin UI: manage connections and saved queries, run ad-hoc SQL. |

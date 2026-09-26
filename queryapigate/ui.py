@@ -39,49 +39,109 @@ UI_HTML = r"""<!doctype html>
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  html, body { height: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 var(--sans); -webkit-font-smoothing: antialiased; }
+  html, body { min-height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 var(--sans); -webkit-font-smoothing: antialiased;
+    display: grid; grid-template-columns: var(--side-w, 232px) minmax(0, 1fr); transition: grid-template-columns 0.18s ease; }
+  body.side-collapsed { --side-w: 60px; }
+  .content { min-width: 0; }
   a { color: var(--ink-2); text-decoration: none; }
   a:hover { color: var(--accent); }
   code, .mono { font-family: var(--mono); font-size: 12px; }
   h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.005em; }
   ::selection { background: var(--accent-soft); }
 
-  /* ---- top bar ---- */
-  header.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: stretch; gap: 16px; height: 48px;
-    padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--line); }
-  .brand { flex: none; display: flex; align-items: center; gap: 10px; }
-  .wordmark { font: 700 13px/1 var(--mono); letter-spacing: 0.02em; }
-  .wordmark b { color: var(--accent); font-weight: 700; }
-  .health { display: inline-flex; align-items: center; gap: 6px; font: 11px/1 var(--mono); color: var(--ink-3);
-    padding: 4px 7px; border: 1px solid var(--line); border-radius: 20px; }
+  /* ---- sidebar ---- */
+  aside.side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; background: var(--surface);
+    border-right: 1px solid var(--line); z-index: 21; min-width: 0; }
+  .side-head { height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--line); }
+  .wordmark { font: 700 13px/1 var(--mono); letter-spacing: 0.02em; white-space: nowrap; }
+  .wordmark b, .wordmark-short b { color: var(--accent); font-weight: 700; }
+  .wordmark-short { display: none; position: relative; font: 700 14px/1 var(--mono); }
+  .wordmark-short i { position: absolute; right: -7px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .health { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font: 11px/1 var(--mono); color: var(--ink-3);
+    padding: 4px 7px; border: 1px solid var(--line); border-radius: 20px; white-space: nowrap; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; display: inline-block; }
   .dot.ok { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .dot.bad { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
   .dot.off { background: transparent; border: 1.5px solid var(--ink-3); }
-  /* When the header is tight, the tab row scrolls rather than squeezing the key bar off-screen. */
-  #tabs { display: flex; align-items: stretch; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-  #tabs button { position: relative; display: flex; align-items: center; gap: 7px; border: 0; background: none; padding: 0 9px;
-    font: 500 13px var(--sans); color: var(--ink-2); cursor: pointer; white-space: nowrap; }
-  #tabs button:hover { color: var(--ink); }
-  #tabs button.active { color: var(--ink); }
-  #tabs button.active::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; }
+  #tabs { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; }
+  .nav-group { display: flex; flex-direction: column; gap: 1px; }
+  .nav-label { font: 600 10.5px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); padding: 4px 10px 6px; }
+  .nav-rule { display: none; height: 1px; background: var(--line); margin: 4px 6px 6px; }
+  #tabs button, .side-foot button.nav { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; border: 0;
+    background: none; padding: 0 10px; border-radius: 6px; font: 500 13px var(--sans); color: var(--ink-2); cursor: pointer; white-space: nowrap; text-align: left; }
+  #tabs button:hover, .side-foot button.nav:hover { color: var(--ink); background: var(--surface-2); }
+  #tabs button.active, .side-foot button.nav.active { color: var(--ink); background: var(--surface-3); }
+  #tabs button.active::before, .side-foot button.nav.active::before { content: ""; position: absolute; left: -10px; top: 7px; bottom: 7px; width: 2px; background: var(--accent); border-radius: 0 2px 2px 0; }
+  .nav-text { flex: 1; }
+  .nav-abbr { display: none; font: 600 11.5px var(--mono); letter-spacing: 0.02em; }
+  #tabs .count { margin-left: auto; }
+  .side-foot { flex: none; padding: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 1px; }
+  .side-link { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 10px; border-radius: 6px; font-size: 12.5px; }
+  .side-link:hover { background: var(--surface-2); }
+  .side-link span { font: 11px var(--mono); color: var(--ink-3); }
+  .side-foot .key-dot-only { display: none; justify-content: center; padding: 10px 0 4px; }
+  #key-panel { margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); display: flex; flex-direction: column; gap: 8px; }
+  .kp-state { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--ink-2); }
+  .kp-state .scope { margin-left: auto; color: var(--ink-3); }
+  .kp-row { display: flex; align-items: center; gap: 6px; }
+  .kp-mask { flex: 1; font: 12px var(--mono); color: var(--ink); letter-spacing: 0.08em; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #key-change, #save-key { height: 24px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface); color: var(--ink); font: 500 12px var(--sans); cursor: pointer; }
+  #key-change:hover, #save-key:hover { background: var(--surface-2); }
+  #key-bar { display: flex; align-items: center; gap: 6px; margin: 0; }
+  #key-bar input { height: 24px; font: 12px var(--mono); padding: 0 7px; }
+  body.side-collapsed .side-head { justify-content: center; padding: 0; }
+  body.side-collapsed .wordmark, body.side-collapsed .health, body.side-collapsed .nav-label, body.side-collapsed .nav-text,
+  body.side-collapsed #tabs .count, body.side-collapsed .side-link, body.side-collapsed #key-panel { display: none; }
+  body.side-collapsed .wordmark-short, body.side-collapsed .nav-rule { display: block; }
+  body.side-collapsed .nav-abbr { display: inline; }
+  body.side-collapsed .side-foot .key-dot-only { display: flex; }
+  body.side-collapsed #tabs button, body.side-collapsed .side-foot button.nav { justify-content: center; padding: 0; }
+
+  /* ---- top bar ---- */
+  header.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px; height: 52px;
+    padding: 0 28px 0 16px; background: var(--bg); border-bottom: 1px solid var(--line); }
+  #side-toggle { flex: none; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent;
+    border-radius: 6px; background: transparent; cursor: pointer; }
+  #side-toggle:hover { background: var(--surface); border-color: var(--line); }
+  #side-toggle span { position: relative; width: 16px; height: 12px; border: 1.5px solid var(--ink-2); border-radius: 3px; }
+  #side-toggle span i { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--ink-2); }
+  body.side-collapsed #side-toggle span i { width: 2px; }
+  .crumbs { display: flex; align-items: center; gap: 8px; font-size: 12.5px; white-space: nowrap; }
+  .crumbs .g { color: var(--ink-3); }
+  .crumbs .sl { color: var(--line-strong); }
+  .crumbs b { color: var(--ink); font-weight: 500; }
   .count { font: 11px/1 var(--mono); color: var(--ink-3); background: var(--surface-2); padding: 3px 5px; border-radius: 4px; min-width: 18px; text-align: center; }
   .count:empty { display: none; }
-  .top-end { flex: none; margin-left: auto; display: flex; align-items: center; gap: 14px; }
-  .top-end > a { font-size: 12.5px; white-space: nowrap; }
-  .chip { font: 11px/1 var(--mono); color: var(--ink-2); padding: 5px 7px; border-radius: 4px; background: var(--surface-2); white-space: nowrap; }
+  .search-wrap { flex: 1; display: flex; justify-content: center; min-width: 0; }
+  #global-search { width: 100%; max-width: 440px; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 11px; border: 1px solid var(--line);
+    border-radius: 7px; background: var(--surface); color: var(--ink-3); font: 12.5px var(--sans); cursor: text; text-align: left; }
+  #global-search:hover { border-color: var(--line-strong); }
+  #global-search .ph { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #global-search kbd, .kbd { font: 10.5px/1 var(--mono); padding: 3px 5px; border-radius: 4px; border: 1px solid var(--line-strong); color: var(--ink-2); opacity: 1; }
+  .chip { font: 11px/1 var(--mono); color: var(--ink-2); padding: 6px 8px; border-radius: 5px; background: var(--surface-2); white-space: nowrap; }
   .chip.low { color: var(--danger); background: var(--danger-soft); }
-  #key-bar { flex: none; display: flex; align-items: center; gap: 0; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--bg); height: 30px; overflow: hidden; }
-  #key-bar label { font-size: 11.5px; color: var(--ink-3); padding: 0 4px 0 9px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-  #key-bar input { border: 0; background: transparent; width: 150px; height: 28px; padding: 0 6px; font: 12px var(--mono); color: var(--ink); outline: none; }
-  #key-bar button { border: 0; border-left: 1px solid var(--line-strong); height: 100%; padding: 0 10px; background: var(--surface); font: 500 12px var(--sans); color: var(--ink); cursor: pointer; }
-  #key-bar button:hover { background: var(--surface-2); }
-  #key-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  /* ---- command palette (Ctrl K) ---- */
+  #palette { position: fixed; inset: 0; z-index: 70; background: rgb(0 0 0 / 0.4); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+  #palette[hidden] { display: none; }
+  .pal-box { width: min(560px, calc(100vw - 32px)); max-height: 60vh; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .pal-box input { height: 44px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 0 14px; font-size: 14px; background: transparent; }
+  .pal-box input:focus { box-shadow: none; }
+  .pal-list { overflow: auto; padding: 6px; }
+  .pal-group { font: 600 10.5px var(--sans); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); padding: 8px 10px 4px; }
+  .pal-item { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; color: var(--ink); padding: 7px 10px; border-radius: 6px; cursor: pointer; text-align: left; font: 12.5px var(--sans); }
+  .pal-item.on, .pal-item:hover { background: var(--surface-3); }
+  .pal-item .nm { font: 600 12px var(--mono); }
+  .pal-item .ds { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .pal-empty { padding: 22px 12px; text-align: center; color: var(--ink-3); }
+  tr.flash td, .qitem.flash { animation: flash 1.6s ease-out; }
+  @keyframes flash { from { background: var(--accent-soft); } to { background: transparent; } }
 
   /* ---- error banner ---- */
-  #error-banner { position: sticky; top: 48px; z-index: 19; background: var(--danger-soft); border-bottom: 1px solid var(--danger);
-    color: var(--ink); padding: 9px 20px; backdrop-filter: blur(8px); background-color: light-dark(#fbeeed, #2a1a1a); }
+  #error-banner { position: sticky; top: 52px; z-index: 19; background: var(--danger-soft); border-bottom: 1px solid var(--danger);
+    color: var(--ink); padding: 9px 28px; backdrop-filter: blur(8px); background-color: light-dark(#fbeeed, #2a1a1a); }
   .eb-main { display: flex; align-items: baseline; gap: 10px; }
   .eb-code { font: 600 11px/1 var(--mono); color: var(--accent-ink); background: var(--danger); padding: 3px 6px; border-radius: 4px; }
   .eb-msg { flex: 1; font-weight: 500; overflow-wrap: anywhere; }
@@ -90,15 +150,35 @@ UI_HTML = r"""<!doctype html>
   .eb-fields code { color: var(--danger); }
 
   /* ---- layout ---- */
-  main { padding: 20px 20px 48px; max-width: 1480px; margin: 0 auto; }
+  main { padding: 24px 28px 48px; max-width: 1480px; }
   main > section { display: none; }
   main > section.active { display: block; }
   .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   .toolbar h2 { font-size: 15px; }
   .toolbar .sub { color: var(--ink-3); font-size: 12.5px; }
   .spacer { flex: 1; }
+  .page-head { display: flex; align-items: flex-end; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .page-head .titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .page-head h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; }
+  .page-head .sub { color: var(--ink-3); font-size: 12.5px; }
+  .page-head .sub code { font: 12px var(--mono); color: var(--ink-2); }
+  .page-head > .btn { height: 32px; padding: 0 14px; }
+  .page-head .updated { font-size: 11.5px; color: var(--ink-3); }
+  .panel-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .panel-foot { display: flex; align-items: center; padding: 9px 14px; color: var(--ink-3); font-size: 12px; }
+  .panel-count { font-size: 12px; color: var(--ink-3); }
+  .seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); gap: 2px; }
+  .seg button { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent;
+    color: var(--ink-2); font: 500 12px var(--sans); cursor: pointer; white-space: nowrap; }
+  .seg button.on { background: var(--surface-3); color: var(--ink); }
+  .seg .n { font: 11px var(--mono); color: var(--ink-3); }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; }
+  .pill i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill.ok { background: var(--accent-soft); color: var(--accent); }
+  .pill.off { background: var(--surface-2); color: var(--ink-2); }
+  .pill.off i { background: transparent; border: 1.5px solid var(--ink-3); width: 4px; height: 4px; }
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
-  .search { height: 30px; width: 220px; padding: 0 9px; }
+  .search { height: 30px; width: 240px; padding: 0 10px; background: var(--bg); border-color: var(--line-strong); }
   .toolbar select { width: auto; }
   #connections-table, #apikeys-table, #roles-table, #auditlog-table { overflow-x: auto; }
 
@@ -114,7 +194,8 @@ UI_HTML = r"""<!doctype html>
   .btn.danger:hover { background: var(--danger-soft); border-color: var(--danger); }
   .btn.ghost { border-color: transparent; background: transparent; }
   .btn.ghost:hover { background: var(--surface-2); }
-  .btn.sm { height: 24px; padding: 0 8px; font-size: 12px; border-radius: 5px; }
+  .btn.sm { height: 26px; padding: 0 10px; font-size: 12px; border-radius: 5px; }
+  .btn.md { height: 28px; padding: 0 11px; font-size: 12px; }
   .btn.icon { width: 30px; padding: 0; font-size: 17px; }
   kbd { font: 10.5px/1 var(--mono); padding: 2px 4px; border-radius: 3px; border: 1px solid currentColor; opacity: 0.7; }
   input, select, textarea { font: 13px var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong);
@@ -138,12 +219,14 @@ UI_HTML = r"""<!doctype html>
   /* ---- tables ---- */
   table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
   table.grid th { position: sticky; top: 0; z-index: 1; text-align: left; font: 600 11px var(--sans); letter-spacing: 0.03em; text-transform: uppercase;
-    color: var(--ink-3); background: var(--surface); padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  table.grid td { padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    color: var(--ink-3); background: var(--surface); padding: 9px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.grid td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.grid td.num, table.grid th.num { text-align: right; }
   table.grid tbody tr:last-child td { border-bottom: 0; }
   table.grid tbody tr:hover td { background: var(--surface-2); }
-  .actions { display: flex; gap: 2px; justify-content: flex-end; opacity: 0.55; }
-  tr:hover .actions, .actions:focus-within { opacity: 1; }
+  .actions { display: flex; gap: 4px; justify-content: flex-end; white-space: nowrap; }
+  .actions .btn.outlined { border-color: var(--line-strong); background: var(--surface); }
+  .actions .btn.outlined:disabled { color: var(--ink-3); }
   .tag { display: inline-block; font: 11px/1.5 var(--mono); padding: 0 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; }
   .tags { display: flex; flex-wrap: wrap; gap: 4px; }
   .name { font: 600 12.5px var(--mono); }
@@ -156,47 +239,10 @@ UI_HTML = r"""<!doctype html>
 
   /* ---- saved queries ---- */
   .split { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 16px; align-items: start; }
-  #queries-table { position: sticky; top: 64px; max-height: calc(100vh - 140px); overflow: auto; }
-  .qitem { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line);
-    background: none; color: inherit; font: inherit; padding: 10px 14px; cursor: pointer; border-left: 2px solid transparent; }
-  .qitem:last-child { border-bottom: 0; }
-  .qitem:hover { background: var(--surface-2); }
-  .qitem.sel { background: var(--accent-soft); border-left-color: var(--accent); }
-  .qi-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
-  .qi-top .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .qi-conn { margin-left: auto; font: 11px var(--mono); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
-  .qi-desc { color: var(--ink-2); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .qgroup { display: flex; flex-direction: column; padding: 3px 8px 3px 10px; background: var(--surface-2); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 1; }
-  .qg-meta { display: flex; align-items: center; gap: 4px; padding: 0 0 3px 16px; margin-left: -6px; }
-  .qg-toggle { display: flex; align-items: center; gap: 6px; min-width: 0; border: 0; background: none; color: var(--ink-2); font: 600 11.5px var(--sans); text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; padding: 5px 0; text-align: left; }
-  .qg-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .qg-reach { font-size: 11px; color: var(--ink-3); white-space: nowrap; margin-right: 4px; }
   .tag.coll { border-style: dashed; }
-  .tag.example { border-color: var(--accent); color: var(--accent); margin-left: 6px; }
   #examples-strip { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 12px; font-size: 12.5px; color: var(--ink-2); }
   #examples-strip[hidden] { display: none; }
-  .impact { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
   .detail { min-height: 360px; }
-  .d-head { padding: 16px 18px 0; display: flex; flex-direction: column; gap: 10px; }
-  .d-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .d-title h3 { font: 600 16px var(--mono); }
-  .d-desc { color: var(--ink-2); margin: 0; text-wrap: pretty; }
-  .versions { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; }
-  .versions button { border: 0; border-right: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); font: 500 11.5px var(--mono);
-    padding: 0 9px; height: 24px; cursor: pointer; }
-  .versions button:last-child { border-right: 0; }
-  .versions button:hover { background: var(--surface-2); }
-  .versions button.on { background: var(--ink); color: var(--surface); }
-  .meta { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: 12px; color: var(--ink-3); margin: 0; }
-  .meta div { display: flex; gap: 6px; }
-  .meta dt { color: var(--ink-3); }
-  .meta dd { margin: 0; color: var(--ink); font-family: var(--mono); font-size: 11.5px; }
-  .subtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 -18px; padding: 0 12px; }
-  .subtabs button { border: 0; background: none; font: 500 12.5px var(--sans); color: var(--ink-2); padding: 9px 8px; cursor: pointer; position: relative; display: flex; gap: 6px; align-items: center; }
-  .subtabs button.on { color: var(--ink); }
-  .subtabs button.on::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: -1px; height: 2px; background: var(--ink); }
-  .d-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
-  .param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
   .run-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
   .run-row .field { width: 150px; }
   .sub-h { font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-3); margin: 0; }
@@ -297,13 +343,6 @@ UI_HTML = r"""<!doctype html>
   .chart-label-y { text-anchor: start; }
 
   /* ---- metrics tab ---- */
-  .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
-  .stat-tile { padding: 12px 14px; }
-  .stat-tile .label { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 4px; }
-  .stat-tile .value { font: 600 22px var(--mono); color: var(--ink); }
-  .stat-tile .value.warn { color: var(--danger); }
-  .metrics-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 14px; }
-  .metrics-charts .chart-panel { margin: 0; }
 
   /* ---- collapsible JSON tree (non-tabular responses) ---- */
   .jt-root { padding: 12px 14px; max-height: 62vh; overflow: auto; }
@@ -336,84 +375,231 @@ UI_HTML = r"""<!doctype html>
   #toasts { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
   .toast { background: var(--ink); color: var(--surface); padding: 8px 12px; border-radius: 6px; font-size: 12.5px; box-shadow: var(--shadow); transition: opacity 0.3s; }
 
-  footer { padding: 0 20px 24px; color: var(--ink-3); font-size: 11.5px; max-width: 1480px; margin: 0 auto; }
+  footer { padding: 0 28px 24px; color: var(--ink-3); font-size: 11.5px; max-width: 1480px; }
 
-  /* The header needs ~1320px on one row with every tab and two-digit counts on them; below 1360px (a little slack for
-     a three-digit count) it drops the tabs onto a second row instead of clipping the last one. */
-  @media (max-width: 1360px) {
-    header.top { height: auto; flex-wrap: wrap; gap: 8px 16px; padding: 8px 14px; }
-    #tabs { order: 3; width: 100%; height: 36px; margin: 0 -12px; }
-    .top-end { flex: 1 1 auto; min-width: 0; flex-wrap: wrap; }
-    #error-banner { top: 0; position: relative; }
+  @media (max-width: 1100px) {
+    header.top { padding-right: 16px; gap: 10px; }
+    #error-banner { padding: 9px 16px; }
   }
   @media (max-width: 980px) {
-    main { padding: 14px; }
+    body { --side-w: 60px; }
+    .side-head { justify-content: center; padding: 0; }
+    .wordmark, .health, .nav-label, .nav-text, #tabs .count, .side-link, #key-panel { display: none; }
+    .wordmark-short, .nav-rule { display: block; }
+    .nav-abbr { display: inline; }
+    .side-foot .key-dot-only { display: flex; }
+    #tabs button, .side-foot button.nav { justify-content: center; padding: 0; }
+    #side-toggle { display: none; }
+    .search-wrap { display: none; }
+    main { padding: 16px; }
     .split, .runner { grid-template-columns: minmax(0, 1fr); }
-    #queries-table { position: static; max-height: 280px; }
+    #queries-panel { position: static; max-height: 320px; }
     .runner-main { border-right: 0; border-bottom: 1px solid var(--line); }
     .hide-sm { display: none; }
   }
+
+  /* ---- settings ---- */
+
+  /* ---- saved queries: list panel, collections, detail ---- */
+  .split { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  #queries-panel { position: sticky; top: 76px; max-height: calc(100vh - 110px); display: flex; flex-direction: column; overflow: hidden; }
+  .qsearch { padding: 10px; border-bottom: 1px solid var(--line); }
+  .qsearch .search { width: 100%; }
+  #queries-table { overflow: auto; }
+  .qgroup { border-bottom: 1px solid var(--line); }
+  .qgroup:last-child { border-bottom: 0; }
+  .qg-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 12px; border: 0; background: var(--surface-2); color: var(--ink-2); cursor: pointer; text-align: left; }
+  .qg-toggle:hover { color: var(--ink); }
+  .qg-toggle .caret { width: 10px; font-size: 9px; color: var(--ink-3); }
+  .qg-name { flex: 1; font: 600 11.5px var(--sans); letter-spacing: 0.04em; text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qg-n { font: 11px var(--mono); color: var(--ink-3); }
+  .qitem { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 9px 14px 9px 30px; border: 0; border-top: 1px solid var(--line);
+    border-left: 2px solid transparent; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+  #queries-table > .qitem:first-child { border-top: 0; }
+  .qitem:hover { background: var(--surface-2); }
+  .qitem.sel { background: var(--accent-soft); border-left-color: var(--accent); }
+  #queries-table > .qitem { padding-left: 14px; }
+  .qi-top { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .qi-top .name { font: 600 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag.v { font-size: 10.5px; padding: 0 5px; background: var(--bg); }
+  .qi-desc { color: var(--ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qg-foot { display: flex; align-items: center; gap: 12px; padding: 7px 14px 8px 30px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-3); }
+  .qg-foot a { font-size: 11.5px; }
+  .tag.example { border-color: var(--accent); color: var(--accent); background: transparent; }
+  #examples-strip { display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 12.5px; color: var(--ink-2); }
+  #examples-strip[hidden] { display: none; }
+  .impact { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+  .detail { min-height: 200px; min-width: 0; }
+  .d-head { padding: 18px 20px 0; display: flex; flex-direction: column; gap: 12px; }
+  .d-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .d-title h3 { font: 600 16px var(--mono); }
+  .d-desc { color: var(--ink-2); margin: 0; text-wrap: pretty; }
+  .vbadge { font: 500 11.5px/22px var(--mono); padding: 0 8px; border-radius: 5px; background: var(--ink); color: var(--surface); }
+  .versions { display: inline-flex; border-radius: 5px; overflow: hidden; border: 1px solid var(--line-strong); }
+  .versions button { border: 0; border-right: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-2); font: 500 11.5px var(--mono); padding: 0 8px; height: 22px; cursor: pointer; }
+  .versions button:last-child { border-right: 0; }
+  .versions button:hover { background: var(--surface-2); }
+  .versions button.on { background: var(--ink); color: var(--surface); }
+  .meta { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .meta div { background: var(--bg); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .meta dt { font-size: 11px; color: var(--ink-3); }
+  .meta dd { margin: 0; font: 12px var(--mono); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 0 -20px; padding: 0 14px; }
+  .subtabs button { border: 0; background: none; font: 500 12.5px var(--sans); color: var(--ink-2); padding: 10px 8px; cursor: pointer; position: relative; display: flex; gap: 6px; align-items: center; }
+  .subtabs button:hover { color: var(--ink); }
+  .subtabs button.on { color: var(--ink); }
+  .subtabs button.on::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: -1px; height: 2px; background: var(--ink); }
+  .d-body { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 16px; }
+  .param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+  .param-grid .field > label { font: 500 12px var(--mono); color: var(--ink); }
+  .param-grid input { font-family: var(--mono); font-size: 12.5px; background: var(--bg); border-color: var(--line-strong); }
+  .get-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .get-row .method { font: 600 11px var(--mono); padding: 3px 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+  .get-row .endpoint { flex: 1; min-width: 160px; font: 12.5px var(--mono); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .get-row select { width: auto; height: 28px; padding: 0 6px; font-size: 12px; background: var(--surface); }
+  .codebox { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 12px 0; font: 12.5px/1.65 var(--mono); overflow: auto; }
+  .ln-r { display: flex; white-space: pre; }
+  .ln-n { flex: none; width: 44px; padding-right: 14px; text-align: right; color: var(--line-strong); user-select: none; }
+  .curlbox { margin: 0; padding: 14px 16px; font: 12.5px/1.65 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); }
+  .menu { position: fixed; z-index: 60; min-width: 190px; padding: 4px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .menu button { border: 0; background: none; text-align: left; padding: 7px 10px; border-radius: 5px; font: 500 12.5px var(--sans); color: var(--danger); cursor: pointer; }
+  .menu button:hover { background: var(--danger-soft); }
+  .tags.scope .tag { border-style: dashed; }
+  .panel-bar select { width: auto; height: 30px; padding: 0 8px; background: var(--bg); border-color: var(--line-strong); font-size: 12.5px; }
+  .results:has(.resbar:empty):has(.res-body:empty) { display: none; }
+  .tag.act { border: 0; padding: 1px 6px; background: var(--surface-2); color: var(--ink-2); }
+  .tag.act.ok { background: var(--accent-soft); color: var(--accent); }
+  .tag.act.bad { background: var(--danger-soft); color: var(--danger); }
+
+  /* ---- metrics ---- */
+  .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+  .stat-tile { background: var(--surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .stat-tile .label { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+  .stat-tile .value { font: 600 22px var(--mono); color: var(--ink); }
+  .stat-tile .value.warn { color: var(--danger); }
+  .metrics-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
+  .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+  .chart-card h3 { font-size: 13px; font-weight: 600; }
+  .bar-row { display: grid; grid-template-columns: 80px minmax(0, 1fr) 48px; align-items: center; gap: 10px; }
+  .bar-row .bl { font: 11.5px var(--mono); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-track { height: 10px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .bar-row .bv { font: 12px var(--mono); text-align: right; }
+
+  /* ---- settings ---- */
+  .settings { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  #settings-nav { flex: 1 1 160px; max-width: 200px; position: sticky; top: 76px; display: flex; flex-direction: column; gap: 1px; }
+  #settings-nav button { display: flex; align-items: center; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font: 500 13px var(--sans); cursor: pointer; text-align: left; }
+  #settings-nav button:hover { color: var(--ink); }
+  #settings-nav button.on { background: var(--surface-3); color: var(--ink); }
+  #settings-nav .n { font: 10.5px var(--mono); color: var(--ink-3); }
+  #settings-body { flex: 999 1 480px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .set-note { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 12.5px; color: var(--ink-2); }
+  .set-note i { flex: none; margin-top: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+  .set-note code { font: 12px var(--mono); color: var(--ink); }
+  .set-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 3px; }
+  .set-head h2 { font-size: 14px; font-weight: 600; }
+  .set-head span { font-size: 12.5px; color: var(--ink-3); }
+  .set-row { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 14px 18px; border-bottom: 1px solid var(--line); align-items: center; }
+  .set-row:last-child { border-bottom: 0; }
+  .set-what { flex: 1 1 280px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .set-label { font-weight: 500; color: var(--ink); }
+  .set-desc { font-size: 12.5px; color: var(--ink-2); text-wrap: pretty; }
+  .set-env { font: 11px var(--mono); color: var(--ink-3); }
+  .set-val { flex: 0 1 auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; max-width: 100%; }
+  .set-val .v { font: 12.5px var(--mono); padding: 5px 9px; border-radius: 5px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .badge { flex: none; font: 10.5px/1.6 var(--mono); padding: 0 6px; border-radius: 4px; border: 1px solid var(--line-strong); color: var(--ink-3); }
+  .badge.env { border-color: var(--accent); color: var(--accent); }
+  .set-row.pref { justify-content: space-between; }
+  .set-row.pref .set-what { flex: 0 1 auto; }
+  body.compact table.grid td { padding: 5px 14px; }
+  body.compact table.rs td { padding: 2px 12px; }
+  @media (max-width: 980px) { .split, .runner { grid-template-columns: minmax(0, 1fr); } #queries-panel { position: static; max-height: 320px; } }
 </style></head>
 <body>
-<header class="top">
-  <div class="brand">
+<aside class="side" id="side">
+  <div class="side-head">
     <span class="wordmark">Query<b>API</b>Gate</span>
+    <span class="wordmark-short" title="QueryAPIGate">Q<b>A</b><i></i></span>
     <span class="health" id="health" title="GET /health"><span class="dot" id="health-dot"></span><span id="version">…</span></span>
   </div>
-  <nav id="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="connections" class="active">Connections <span class="count" id="count-connections"></span></button>
-    <button type="button" role="tab" data-tab="queries">Saved Queries <span class="count" id="count-queries"></span></button>
-    <button type="button" role="tab" data-tab="apikeys">API Keys <span class="count" id="count-apikeys"></span></button>
-    <button type="button" role="tab" data-tab="roles">Roles <span class="count" id="count-roles"></span></button>
-    <button type="button" role="tab" data-tab="auditlog">Audit Log</button>
-    <button type="button" role="tab" data-tab="metrics">Metrics</button>
-    <button type="button" role="tab" data-tab="run">Run SQL</button>
+  <nav id="tabs" role="tablist" aria-label="Sections">
+    <div class="nav-group"><div class="nav-label">Data</div><div class="nav-rule"></div>
+      <button type="button" role="tab" data-tab="connections" data-group="Data" data-label="Connections" title="Connections" class="active"><span class="nav-abbr">Cn</span><span class="nav-text">Connections</span><span class="count" id="count-connections"></span></button>
+      <button type="button" role="tab" data-tab="queries" data-group="Data" data-label="Saved queries" title="Saved queries"><span class="nav-abbr">Sq</span><span class="nav-text">Saved queries</span><span class="count" id="count-queries"></span></button>
+      <button type="button" role="tab" data-tab="run" data-group="Data" data-label="Run SQL" title="Run SQL"><span class="nav-abbr">Rn</span><span class="nav-text">Run SQL</span></button>
+    </div>
+    <div class="nav-group"><div class="nav-label">Access</div><div class="nav-rule"></div>
+      <button type="button" role="tab" data-tab="apikeys" data-group="Access" data-label="API keys" title="API keys"><span class="nav-abbr">Ky</span><span class="nav-text">API keys</span><span class="count" id="count-apikeys"></span></button>
+      <button type="button" role="tab" data-tab="roles" data-group="Access" data-label="Roles" title="Roles"><span class="nav-abbr">Ro</span><span class="nav-text">Roles</span><span class="count" id="count-roles"></span></button>
+    </div>
+    <div class="nav-group"><div class="nav-label">Observability</div><div class="nav-rule"></div>
+      <button type="button" role="tab" data-tab="metrics" data-group="Observability" data-label="Metrics" title="Metrics"><span class="nav-abbr">Mt</span><span class="nav-text">Metrics</span></button>
+      <button type="button" role="tab" data-tab="auditlog" data-group="Observability" data-label="Audit log" title="Audit log"><span class="nav-abbr">Au</span><span class="nav-text">Audit log</span></button>
+    </div>
   </nav>
-  <div class="top-end">
-    <span class="chip" id="rate" hidden title="X-RateLimit-Remaining / X-RateLimit-Limit"></span>
-    <a href="docs">API docs</a>
-    <a href="openapi.json">OpenAPI</a>
-    <form id="key-bar" autocomplete="off">
-      <label for="key"><span class="dot off" id="key-dot"></span>API key</label>
-      <input id="key" type="password" autocomplete="off" placeholder="X-API-Key · this tab only">
-      <button id="save-key" type="submit">Apply</button>
-    </form>
+  <div class="side-foot">
+    <button type="button" role="tab" class="nav" data-tab="settings" data-group="System" data-label="Settings" id="nav-settings" title="Settings"><span class="nav-abbr">St</span><span class="nav-text">Settings</span></button>
+    <div class="key-dot-only" title="API key applied to this tab"><span class="dot off" id="key-dot-narrow"></span></div>
+    <a class="side-link" href="docs">API docs<span>/docs</span></a>
+    <a class="side-link" href="openapi.json">OpenAPI<span>.json</span></a>
+    <div id="key-panel">
+      <div class="kp-state"><span class="dot off" id="key-dot"></span><span id="key-state">No API key</span><span class="scope">this tab</span></div>
+      <div class="kp-row" id="key-view" hidden><span class="kp-mask" id="key-mask"></span><button type="button" id="key-change">Change</button></div>
+      <form id="key-bar" autocomplete="off">
+        <input id="key" type="password" autocomplete="off" placeholder="X-API-Key" aria-label="API key">
+        <button id="save-key" type="submit">Apply</button>
+      </form>
+    </div>
   </div>
+</aside>
+<div class="content">
+<header class="top">
+  <button type="button" id="side-toggle" title="Collapse sidebar (Ctrl B)" aria-label="Collapse sidebar" aria-expanded="true"><span><i></i></span></button>
+  <div class="crumbs" id="crumbs"><span class="g" id="crumb-group">Data</span><span class="sl">/</span><b id="crumb-page">Connections</b></div>
+  <div class="search-wrap"><button type="button" id="global-search" aria-label="Search queries, connections, keys"><span class="ph">Search queries, connections, keys…</span><kbd>Ctrl K</kbd></button></div>
+  <span class="chip" id="rate" hidden title="X-RateLimit-Remaining / X-RateLimit-Limit"></span>
 </header>
 <div id="error-banner" role="alert" hidden></div>
 
 <main>
   <section id="tab-connections" class="active">
-    <div class="toolbar">
-      <h2>Connections</h2>
-      <span class="sub" id="connections-sub"></span>
+    <div class="page-head">
+      <div class="titles"><h1>Connections</h1><span class="sub">Databases this gateway can run saved queries against.</span></div>
       <span class="spacer"></span>
-      <input id="conn-filter" class="search" type="search" placeholder="Filter by name, type, host…">
       <button id="new-connection" type="button" class="btn primary">New connection</button>
     </div>
-    <div id="connections-table" class="panel"><div class="loading"><span class="spin"></span>Loading connections…</div></div>
+    <div class="panel" style="overflow:hidden">
+      <div class="panel-bar">
+        <div class="seg" id="conn-tabs" role="group" aria-label="Connection status"></div>
+        <span class="spacer"></span>
+        <input id="conn-filter" class="search" type="search" placeholder="Filter by name, type, host…">
+      </div>
+      <div id="connections-table"><div class="loading"><span class="spin"></span>Loading connections…</div></div>
+      <div class="panel-foot" id="connections-foot"></div>
+    </div>
   </section>
 
   <section id="tab-queries">
     <div id="examples-strip" class="panel" hidden></div>
-    <div class="toolbar">
-      <h2>Saved queries</h2>
-      <span class="sub" id="queries-sub"></span>
+    <div class="page-head">
+      <div class="titles"><h1>Saved queries</h1><span class="sub" id="queries-sub">Each one is published at <code>/q/&lt;name&gt;</code>.</span></div>
       <span class="spacer"></span>
-      <input id="query-filter" class="search" type="search" placeholder="Filter by name, description, tag…">
       <button id="new-collection" type="button" class="btn">New collection</button>
       <button id="new-query" type="button" class="btn primary">New saved query</button>
     </div>
     <div class="split">
-      <div id="queries-table" class="panel"><div class="loading"><span class="spin"></span>Loading…</div></div>
+      <div id="queries-panel" class="panel">
+        <div class="qsearch"><input id="query-filter" class="search" type="search" placeholder="Filter by name, description, tag…"></div>
+        <div id="queries-table"><div class="loading"><span class="spin"></span>Loading…</div></div>
+      </div>
       <div id="query-detail" class="panel detail"><div class="empty"><strong>No query selected</strong><span>Pick a saved query to run it, read its SQL or see its history.</span></div></div>
     </div>
   </section>
 
   <section id="tab-apikeys">
-    <div class="toolbar">
-      <h2>API keys</h2>
-      <span class="sub" id="apikeys-sub"></span>
+    <div class="page-head">
+      <div class="titles"><h1>API keys</h1><span class="sub" id="apikeys-sub">Scope each one to connections, collections or roles.</span></div>
       <span class="spacer"></span>
       <button id="new-apikey" type="button" class="btn primary">New API key</button>
     </div>
@@ -421,9 +607,8 @@ UI_HTML = r"""<!doctype html>
   </section>
 
   <section id="tab-roles">
-    <div class="toolbar">
-      <h2>Roles</h2>
-      <span class="sub" id="roles-sub"></span>
+    <div class="page-head">
+      <div class="titles"><h1>Roles</h1><span class="sub" id="roles-sub">Reusable permission sets that API keys can inherit.</span></div>
       <span class="spacer"></span>
       <button id="new-role" type="button" class="btn primary">New role</button>
     </div>
@@ -431,29 +616,36 @@ UI_HTML = r"""<!doctype html>
   </section>
 
   <section id="tab-auditlog">
-    <div class="toolbar">
-      <h2>Audit log</h2>
-      <span class="sub" id="auditlog-sub"></span>
+    <div class="page-head">
+      <div class="titles"><h1>Audit log</h1><span class="sub" id="auditlog-sub">Administrative actions, newest first.</span></div>
       <span class="spacer"></span>
-      <select id="auditlog-action-filter"><option value="">All actions</option></select>
-      <input id="auditlog-filter" class="search" type="search" placeholder="Filter by actor, target, time…">
-      <button id="refresh-auditlog" type="button" class="btn ghost">Refresh</button>
+      <button id="refresh-auditlog" type="button" class="btn">Refresh</button>
+      <button id="export-auditlog" type="button" class="btn">Export</button>
     </div>
-    <div id="auditlog-table" class="panel"><div class="loading"><span class="spin"></span>Loading audit log…</div></div>
+    <div class="panel" style="overflow:hidden">
+      <div class="panel-bar">
+        <select id="auditlog-action-filter"><option value="">All actions</option></select>
+        <input id="auditlog-filter" class="search" style="width:260px" type="search" placeholder="Filter by actor, target, time…">
+        <span class="spacer"></span><span class="panel-count" id="auditlog-count"></span>
+      </div>
+      <div id="auditlog-table"><div class="loading"><span class="spin"></span>Loading audit log…</div></div>
+    </div>
   </section>
 
   <section id="tab-metrics">
-    <div class="toolbar">
-      <h2>Metrics</h2>
-      <span class="sub">Live totals since this process started - no history, no trends. For that, scrape
-        <code>/metrics</code> with Prometheus and import the bundled Grafana dashboard.</span>
+    <div class="page-head">
+      <div class="titles"><h1>Metrics</h1><span class="sub">Live totals since this process started. For trends, scrape <code>/metrics</code> with Prometheus and import the bundled Grafana dashboard.</span></div>
       <span class="spacer"></span>
-      <button id="refresh-metrics" type="button" class="btn ghost">Refresh</button>
+      <span class="updated" id="metrics-updated"></span>
+      <button id="refresh-metrics" type="button" class="btn">Refresh</button>
     </div>
     <div id="metrics-body"><div class="loading"><span class="spin"></span>Loading metrics…</div></div>
   </section>
 
   <section id="tab-run">
+    <div class="page-head">
+      <div class="titles"><h1>Run SQL</h1><span class="sub">Ad-hoc statements against any active connection. Nothing here is saved.</span></div>
+    </div>
     <form id="run-form" class="panel runner" novalidate>
       <div class="runner-main">
         <div class="runner-bar">
@@ -467,8 +659,8 @@ UI_HTML = r"""<!doctype html>
           </select>
           <span class="spacer"></span>
           <span class="hint hide-sm"><kbd>Ctrl</kbd> <kbd>Enter</kbd></span>
-          <button type="button" class="btn ghost" id="run-explain-button" title="Run EXPLAIN on this query">Explain</button>
-          <button type="submit" class="btn primary" id="run-button">Run</button>
+          <button type="button" class="btn ghost md" id="run-explain-button" title="Run EXPLAIN on this query">Explain</button>
+          <button type="submit" class="btn primary md" id="run-button" style="padding:0 16px">Run</button>
         </div>
         <div class="editor" id="run-editor">
           <pre class="hl" id="run-sql-hl" aria-hidden="true"></pre>
@@ -495,8 +687,20 @@ UI_HTML = r"""<!doctype html>
       <div class="res-body" id="run-results"></div>
     </div>
   </section>
+
+  <section id="tab-settings">
+    <div class="page-head">
+      <div class="titles"><h1>Settings</h1><span class="sub">Effective configuration of this server, plus preferences for this browser.</span></div>
+      <span class="spacer"></span>
+      <button id="copy-env" type="button" class="btn">Copy as .env</button>
+    </div>
+    <div class="settings">
+      <nav id="settings-nav" aria-label="Settings sections"></nav>
+      <div id="settings-body"><div class="loading"><span class="spin"></span>Loading settings…</div></div>
+    </div>
+  </section>
 </main>
-<footer><span id="footer-note">Every request is sent to this server’s JSON API with the key above.</span></footer>
+</div>
 
 <div class="backdrop" id="drawer-backdrop" hidden></div>
 <aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-labelledby="drawer-title">
@@ -512,6 +716,9 @@ UI_HTML = r"""<!doctype html>
     <div id="role-form-slot"></div>
   </div>
 </aside>
+<div id="palette" hidden role="dialog" aria-label="Search">
+  <div class="pal-box"><input id="pal-input" type="search" autocomplete="off" spellcheck="false" placeholder="Search queries, connections, keys…" aria-label="Search"><div class="pal-list" id="pal-list"></div></div>
+</div>
 <div id="toasts" aria-live="polite"></div>
 
 <script>
@@ -546,7 +753,18 @@ function loadingNode(text) { return h('div', { className: 'loading' }, h('span',
 // ---- API key: per-tab, same sessionStorage key /docs uses ----
 function getKey() { try { return sessionStorage.getItem('queryapigate-key') || ''; } catch (e) { return ''; } }
 function setKey(v) { try { sessionStorage.setItem('queryapigate-key', v); } catch (e) {} }
-function paintKeyState() { $('key-dot').className = 'dot ' + (getKey() ? 'ok' : 'off'); }
+var keyEditing = false;
+function paintKeyState() {
+  var key = getKey();
+  $('key-dot').className = 'dot ' + (key ? 'ok' : 'off');
+  $('key-dot-narrow').className = 'dot ' + (key ? 'ok' : 'off');
+  $('key-state').textContent = key ? 'API key applied' : 'No API key';
+  var showView = !!key && !keyEditing;
+  $('key-view').hidden = !showView;
+  $('key-bar').hidden = showView;
+  // the last four characters only when the key is long enough that they reveal nothing useful
+  $('key-mask').textContent = '••••••••' + (key.length >= 16 ? key.slice(-4) : '');
+}
 
 // ---- feedback ----
 function showError(message, detail) {
@@ -608,23 +826,192 @@ async function apiJson(path, opts) {
   return body;
 }
 
-// ---- tabs ----
+// ---- tabs (the sidebar) ----
+var NAV_BUTTONS = document.querySelectorAll('#tabs button, #nav-settings');
 function showTab(name) {
-  document.querySelectorAll('#tabs button').forEach(function (b) {
+  NAV_BUTTONS.forEach(function (b) {
     var on = b.dataset.tab === name;
     b.classList.toggle('active', on);
     b.setAttribute('aria-selected', on ? 'true' : 'false');
+    if (on) {
+      $('crumb-group').textContent = b.dataset.group;
+      $('crumb-page').textContent = b.dataset.label;
+    }
   });
   document.querySelectorAll('main > section').forEach(function (s) { s.classList.toggle('active', s.id === 'tab-' + name); });
   try { sessionStorage.setItem('queryapigate-ui-tab', name); } catch (e) {}
 }
-document.querySelectorAll('#tabs button').forEach(function (btn) { btn.onclick = function () { showTab(btn.dataset.tab); }; });
+NAV_BUTTONS.forEach(function (btn) { btn.onclick = function () { showTab(btn.dataset.tab); }; });
 
-$('key').value = getKey();
+// ---- sidebar: collapsible, remembered per browser, Ctrl/Cmd+B ----
+function setSideCollapsed(collapsed) {
+  document.body.classList.toggle('side-collapsed', collapsed);
+  var toggle = $('side-toggle');
+  toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  toggle.title = collapsed ? 'Expand sidebar (Ctrl B)' : 'Collapse sidebar (Ctrl B)';
+  toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  try { localStorage.setItem('queryapigate-ui-side-collapsed', collapsed ? '1' : '0'); } catch (e) {}
+}
+$('side-toggle').onclick = function () { setSideCollapsed(!document.body.classList.contains('side-collapsed')); };
+document.addEventListener('keydown', function (e) {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+    e.preventDefault();
+    $('side-toggle').onclick();
+  }
+});
+try { if (localStorage.getItem('queryapigate-ui-side-collapsed') === '1') setSideCollapsed(true); } catch (e) {}
+
+// ---- global search (Ctrl/Cmd+K): jump to a connection, saved query, API key or role ----
+var palSel = 0, palItems = [];
+function flashRow(boxId, name) {
+  var row = Array.prototype.filter.call(document.querySelectorAll('#' + boxId + ' [data-name]'), function (el) { return el.getAttribute('data-name') === name; })[0];
+  if (!row) return;
+  row.scrollIntoView({ block: 'center' });
+  row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash');
+}
+function paletteEntries() {
+  var out = [];
+  Object.keys(connectionsCache).sort().forEach(function (n) {
+    out.push({ group: 'Connections', name: n, desc: connectionsCache[n].db || '', go: function () { showTab('connections'); connFilter = 'all'; renderConnections(); flashRow('connections-table', n); } });
+  });
+  filesCache.forEach(function (f) {
+    var l = latestOf(f);
+    out.push({ group: 'Saved queries', name: f.filename, desc: l.description || '', extra: [f.collection, (l.tags || []).join(' ')].join(' '), go: function () {
+      showTab('queries'); $('query-filter').value = ''; selected.name = f.filename; selected.version = l.version; selected.tab = 'run';
+      collapsedGroups[f.collection || ''] = false; renderQueryList(); renderDetail(); flashRow('queries-table', f.filename); } });
+  });
+  Object.keys(apiKeysCache).sort().forEach(function (n) {
+    out.push({ group: 'API keys', name: n, desc: apiKeysCache[n].rate_limit || '', go: function () { showTab('apikeys'); flashRow('apikeys-table', n); } });
+  });
+  Object.keys(rolesCache).sort().forEach(function (n) {
+    out.push({ group: 'Roles', name: n, desc: '', go: function () { showTab('roles'); flashRow('roles-table', n); } });
+  });
+  return out;
+}
+function paintPalette() {
+  var q = $('pal-input').value.trim().toLowerCase();
+  palItems = paletteEntries().filter(function (e) { return !q || [e.name, e.desc, e.extra || '', e.group].join(' ').toLowerCase().indexOf(q) !== -1; }).slice(0, 40);
+  if (palSel >= palItems.length) palSel = Math.max(0, palItems.length - 1);
+  var list = clear($('pal-list'));
+  if (!palItems.length) { list.appendChild(h('div', { className: 'pal-empty', text: q ? 'Nothing matches “' + q + '”.' : 'Nothing to search yet.' })); return; }
+  var lastGroup = null;
+  palItems.forEach(function (e, i) {
+    if (e.group !== lastGroup) { list.appendChild(h('div', { className: 'pal-group', text: e.group })); lastGroup = e.group; }
+    list.appendChild(h('button', { type: 'button', className: 'pal-item' + (i === palSel ? ' on' : ''), onclick: function () { palGo(i); },
+      onmousemove: function () { if (palSel !== i) { palSel = i; paintPalette(); } } },
+      h('span', { className: 'nm', text: e.name }), h('span', { className: 'ds', text: e.desc })));
+  });
+  var on = list.querySelector('.pal-item.on');
+  if (on) on.scrollIntoView({ block: 'nearest' });
+}
+function palGo(i) { var e = palItems[i]; if (!e) return; closePalette(); e.go(); }
+function openPalette() { $('palette').hidden = false; $('pal-input').value = ''; palSel = 0; paintPalette(); $('pal-input').focus(); }
+function closePalette() { $('palette').hidden = true; }
+$('global-search').onclick = openPalette;
+$('palette').onmousedown = function (e) { if (e.target === $('palette')) closePalette(); };
+$('pal-input').oninput = function () { palSel = 0; paintPalette(); };
+$('pal-input').onkeydown = function (e) {
+  if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palItems.length - 1, palSel + 1); paintPalette(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(0, palSel - 1); paintPalette(); }
+  else if (e.key === 'Enter') { e.preventDefault(); palGo(palSel); }
+  else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+};
+document.addEventListener('keydown', function (e) {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); if ($('palette').hidden) openPalette(); else closePalette(); }
+});
+
+// ---- interface preferences: this browser only (localStorage), never sent to the server ----
+var PREFS_KEY = 'queryapigate-ui-prefs';
+var PREF_DEFAULTS = { theme: 'System', density: 'Comfortable', format: 'json' };
+var prefs = (function () {
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {}; } catch (e) {}
+  return Object.assign({}, PREF_DEFAULTS, saved);
+})();
+function applyPrefs() {
+  document.documentElement.style.colorScheme = { System: 'light dark', Light: 'light', Dark: 'dark' }[prefs.theme] || 'light dark';
+  document.body.classList.toggle('compact', prefs.density === 'Compact');
+  $('run-format').value = prefs.format;
+}
+function setPref(key, value) {
+  prefs[key] = value;
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) {}
+  applyPrefs();
+  renderSettings();
+}
+var PREF_ROWS = [
+  ['theme', 'Theme', 'Follows your operating system unless set.', ['System', 'Light', 'Dark']],
+  ['density', 'Table density', 'Row height in lists and result grids.', ['Compact', 'Comfortable']],
+  ['format', 'Default result format', 'Pre-selected format in Run SQL.', ['json', 'csv', 'ndjson', 'tsv', 'xml', 'yaml', 'xlsx']]
+];
+
+// ---- settings: a read-only view of GET /settings (environment variables), plus the interface preferences ----
+var settingsData = null, settingsSection = 'general';
+async function loadSettings() {
+  var body = await apiJson('settings');
+  if (!body) { settingsData = null; renderSettings(); return; }
+  settingsData = body.sections;
+  renderSettings();
+  paintAuditSub();
+}
+function renderSettings() {
+  var nav = clear($('settings-nav')), body = clear($('settings-body'));
+  var sections = settingsData || [];
+  function navButton(id, label, n) {
+    return h('button', { type: 'button', className: settingsSection === id ? 'on' : '', onclick: function () { settingsSection = id; renderSettings(); } },
+      h('span', { style: 'flex:1', text: label }), n === '' ? null : h('span', { className: 'n', text: String(n) }));
+  }
+  sections.forEach(function (sec) { nav.appendChild(navButton(sec.id, sec.title, sec.rows.length)); });
+  nav.appendChild(navButton('ui', 'Interface', ''));
+  if (settingsSection === 'ui') {
+    body.appendChild(h('div', { className: 'panel' },
+      h('div', { className: 'set-head' }, h('h2', { text: 'Interface' }), h('span', { text: 'Stored in this browser only. Nothing is sent to the server.' })),
+      PREF_ROWS.map(function (def) {
+        return h('div', { className: 'set-row pref' },
+          h('div', { className: 'set-what' }, h('span', { className: 'set-label', text: def[1] }), h('span', { className: 'set-desc', text: def[2] })),
+          h('div', { className: 'seg' }, def[3].map(function (opt) {
+            return h('button', { type: 'button', className: prefs[def[0]] === opt ? 'on' : '', text: opt, onclick: function () { setPref(def[0], opt); } });
+          })));
+      })));
+    return;
+  }
+  if (!settingsData) {
+    body.appendChild(h('div', { className: 'panel' }, h('div', { className: 'empty' }, h('strong', { text: 'Settings unavailable' }),
+      h('span', { text: 'Settings are visible to the admin key only. Apply it in the sidebar, or check the message at the top of the page.' }))));
+    return;
+  }
+  var sec = sections.filter(function (x) { return x.id === settingsSection; })[0] || sections[0];
+  if (!sec) return;
+  settingsSection = sec.id;
+  body.appendChild(h('div', { className: 'set-note' }, h('i'),
+    h('span', {}, 'Read-only. These values come from ', h('code', { text: 'QUERYAPIGATE_*' }),
+      ' environment variables and are validated at startup. Change them in your deployment and restart the server.')));
+  body.appendChild(h('div', { className: 'panel' },
+    h('div', { className: 'set-head' }, h('h2', { text: sec.title }), h('span', { text: sec.description })),
+    sec.rows.map(function (row) {
+      return h('div', { className: 'set-row' },
+        h('div', { className: 'set-what' }, h('span', { className: 'set-label', text: row.label }), h('span', { className: 'set-desc', text: row.description }),
+          h('code', { className: 'set-env', text: row.env })),
+        h('div', { className: 'set-val' }, h('span', { className: 'v', title: row.value, text: row.value }),
+          h('span', { className: 'badge ' + row.source, text: row.source })));
+    })));
+}
+$('copy-env').onclick = function () {
+  var lines = [];
+  (settingsData || []).forEach(function (sec) {
+    sec.rows.forEach(function (row) { if (row.env_value !== null && row.env_value !== undefined) lines.push(row.env + '=' + row.env_value); });
+  });
+  if (!lines.length) { toast('Nothing to copy: every setting is at its default (secrets are never copied)'); return; }
+  copyText(lines.join('\n') + '\n');
+};
+
 paintKeyState();
+$('key-change').onclick = function () { keyEditing = true; paintKeyState(); $('key').value = ''; $('key').focus(); };
 $('key-bar').onsubmit = function (e) {
   e.preventDefault();
   setKey($('key').value);
+  keyEditing = false;
+  $('key').value = '';
   paintKeyState();
   showError('');
   toast($('key').value ? 'API key applied to this tab' : 'API key cleared');
@@ -885,19 +1272,25 @@ async function loadConnections() {
 // A key's usage has no avg_duration_ms (request/query latency isn't split by key - see metrics.py); a
 // connection's does, since a connection has exactly one dialect and its latency histogram is keyed by it.
 function usageCell(usage) {
-  if (!usage || !usage.queries) return h('td', { className: 'dim', text: 'No activity yet' });
+  if (!usage || !usage.queries) return h('td', { className: 'dim', style: 'white-space:nowrap', text: 'No activity yet' });
   var parts = [usage.queries + (usage.queries === 1 ? ' query' : ' queries')];
   if (usage.errors) parts.push(usage.errors + ' failed');
   if (usage.avg_duration_ms !== undefined && usage.avg_duration_ms !== null) parts.push(usage.avg_duration_ms + 'ms avg');
   var title = usage.rows + (usage.rows === 1 ? ' row' : ' rows') + ' returned in total · since this process started';
-  return h('td', { title: title, text: parts.join(' · ') });
+  return h('td', { title: title, style: 'white-space:nowrap', text: parts.join(' · ') });
 }
+var connFilter = 'all';
 function renderConnections() {
   var box = clear($('connections-table'));
   var all = Object.keys(connectionsCache).sort();
   var activeCount = all.filter(function (n) { return connectionsCache[n].active; }).length;
   $('count-connections').textContent = all.length ? String(all.length) : '';
-  $('connections-sub').textContent = all.length ? activeCount + ' active of ' + all.length : '';
+  var tabs = clear($('conn-tabs'));
+  [['all', 'All', all.length], ['active', 'Active', activeCount], ['inactive', 'Inactive', all.length - activeCount]].forEach(function (t) {
+    tabs.appendChild(h('button', { type: 'button', className: connFilter === t[0] ? 'on' : '', onclick: function () { connFilter = t[0]; renderConnections(); } },
+      t[1], h('span', { className: 'n', text: String(t[2]) })));
+  });
+  var foot = clear($('connections-foot'));
   if (!all.length) {
     box.appendChild(h('div', { className: 'empty' }, h('strong', { text: 'No connections yet' }),
       h('span', { text: 'Add a MySQL, PostgreSQL, ClickHouse, SQLite or H2 database to start running SQL.' }),
@@ -907,30 +1300,32 @@ function renderConnections() {
   var q = $('conn-filter').value.trim().toLowerCase();
   var names = all.filter(function (n) {
     var c = connectionsCache[n];
+    if (connFilter === 'active' && !c.active) return false;
+    if (connFilter === 'inactive' && c.active) return false;
     return !q || [n, c.db, c.host, c.database, c.user].join(' ').toLowerCase().indexOf(q) !== -1;
   });
-  if (!names.length) { box.appendChild(h('div', { className: 'empty' }, h('span', { text: 'No connections match “' + q + '”.' }))); return; }
+  foot.appendChild(h('span', { text: 'Showing ' + names.length + ' of ' + all.length + (all.length === 1 ? ' connection' : ' connections') }));
+  if (!names.length) { box.appendChild(h('div', { className: 'empty' }, h('span', { text: q ? 'No connections match “' + q + '”.' : 'No ' + connFilter + ' connections.' }))); return; }
   var rows = names.map(function (name) {
     var c = connectionsCache[name];
     var endpoint = c.host ? c.host + (c.port ? ':' + c.port : '') : '';
-    return h('tr', {},
-      h('td', { style: 'width:28px;padding-right:0' }, h('span', { className: 'dot ' + (c.active ? 'ok' : 'off'), title: c.active ? 'Active' : 'Inactive' })),
-      h('td', {}, h('span', { className: 'name', text: name }), c.example ? exampleBadge() : null),
+    return h('tr', { 'data-name': name },
+      h('td', {}, h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('span', { className: 'name', text: name }), c.example ? exampleBadge() : null)),
       h('td', {}, h('span', { className: 'tag', text: c.db || '?' })),
-      h('td', { className: 'mono' }, endpoint || h('span', { className: 'dim', text: '—' })),
+      h('td', { className: 'mono', style: 'white-space:nowrap' }, endpoint || h('span', { className: 'dim', text: '—' })),
       h('td', { className: 'mono', text: c.database || '' }),
-      h('td', { className: 'mono', text: c.user || '' }),
-      h('td', { className: c.active ? '' : 'dim', text: c.active ? 'Active' : 'Inactive' }),
+      h('td', { className: 'mono dim' }, c.user || '—'),
+      h('td', {}, h('span', { className: 'pill ' + (c.active ? 'ok' : 'off') }, h('i'), c.active ? 'Active' : 'Inactive')),
       usageCell(c.usage),
       h('td', {}, h('div', { className: 'actions' },
-        h('button', { type: 'button', className: 'btn ghost sm', text: 'Query', disabled: !c.active, title: 'Open in Run SQL', onclick: function () {
+        h('button', { type: 'button', className: 'btn sm outlined', text: 'Query', disabled: !c.active, title: 'Open in Run SQL', onclick: function () {
           $('run-connection').value = name; showTab('run'); $('run-sql').focus(); } }),
         h('button', { type: 'button', className: 'btn ghost sm', text: 'Edit', onclick: function () { openConnectionForm(name, c); } }),
         h('button', { type: 'button', className: 'btn ghost sm danger', text: 'Delete', onclick: function () { deleteConnection(name); } }))));
   });
-  box.appendChild(h('table', { className: 'grid' },
-    h('thead', {}, h('tr', {}, ['', 'Name', 'Type', 'Host', 'Database', 'User', 'Status', 'Usage', ''].map(function (t) { return h('th', { text: t }); }))),
-    h('tbody', {}, rows)));
+  box.appendChild(h('div', { style: 'overflow-x:auto' }, h('table', { className: 'grid' },
+    h('thead', {}, h('tr', {}, ['Name', 'Type', 'Host', 'Database', 'User', 'Status', 'Usage', ''].map(function (t) { return h('th', { text: t }); }))),
+    h('tbody', {}, rows))));
 }
 $('conn-filter').oninput = renderConnections;
 function connectionOptions(select, includeBlank, blankText) {
@@ -975,12 +1370,13 @@ async function loadApiKeys() {
   }
   apiKeysCache = data.keys || {};
   renderApiKeys();
+  if (Object.keys(rolesCache).length) renderRoles(); // the Keys column counts keys created from each role
 }
 function renderApiKeys() {
   var box = clear($('apikeys-table'));
   var names = Object.keys(apiKeysCache).sort();
   $('count-apikeys').textContent = names.length ? String(names.length) : '';
-  $('apikeys-sub').textContent = names.length ? names.length + (names.length === 1 ? ' key' : ' keys') : '';
+  $('apikeys-sub').textContent = (names.length ? names.length + (names.length === 1 ? ' key. ' : ' keys. ') : '') + 'Scope each one to connections, collections or roles.';
   if (!names.length) {
     box.appendChild(h('div', { className: 'empty' }, h('strong', { text: 'No scoped API keys yet' }),
       h('span', { text: 'QUERYAPIGATE_API_KEY is a full-access admin key. Create a scoped one to limit a caller to specific connections, read-only.' }),
@@ -990,45 +1386,46 @@ function renderApiKeys() {
   var today = new Date().toISOString().slice(0, 10);
   var rows = names.map(function (name) {
     var k = apiKeysCache[name];
-    var conns = k.connections === '*'
-      ? h('span', { className: 'tag', text: 'all connections' })
-      : h('div', { className: 'tags' }, (k.connections || []).length
-          ? k.connections.map(function (c) { return h('span', { className: 'tag', text: c }); })
-          : [h('span', { className: 'dim', text: 'none' })]);
-    var queries = queryGrantNode(k);
     var expired = k.expires_at && k.expires_at < today;
     var expiry = k.expires_at
-      ? h('span', { className: expired ? 'dim' : '', style: expired ? 'color:var(--danger)' : '', text: k.expires_at + (expired ? ' (expired)' : '') })
+      ? h('span', { style: expired ? 'color:var(--danger)' : '', text: k.expires_at + (expired ? ' (expired)' : '') })
       : h('span', { className: 'dim', text: 'never' });
     var ips = (k.allowed_ips || []).length
       ? h('span', { title: k.allowed_ips.join(', '), text: k.allowed_ips.length + (k.allowed_ips.length === 1 ? ' IP' : ' IPs') })
       : h('span', { className: 'dim', text: 'any' });
-    var writeOps = k.allow_writes && (k.allowed_write_ops || []).length;
-    var access = !k.allow_writes
-      ? h('td', { className: 'dim', text: 'Read-only' })
-      : writeOps
-        ? h('td', { title: k.allowed_write_ops.join(', '),
-                   text: 'Read/write (' + k.allowed_write_ops.length + (k.allowed_write_ops.length === 1 ? ' op' : ' ops') + ')' })
-        : h('td', { text: 'Read/write' });
-    return h('tr', {},
-      h('td', { style: 'width:28px;padding-right:0' }, h('span', { className: 'dot ' + (k.active && !expired ? 'ok' : 'off'), title: !k.active ? 'Revoked' : (expired ? 'Expired' : 'Active') })),
-      h('td', {}, h('span', { className: 'name', text: name })),
-      h('td', {}, conns),
-      h('td', {}, queries),
-      access,
-      h('td', {}, expiry),
-      h('td', { className: k.rate_limit ? 'mono' : 'mono dim', text: k.rate_limit || 'server default' }),
-      h('td', {}, ips),
-      h('td', { className: 'mono dim', text: k.created_at || '' }),
-      h('td', { className: 'mono dim', text: k.last_used_at || 'never' }),
+    return h('tr', { 'data-name': name },
+      h('td', {}, h('div', { style: 'display:flex;align-items:center;gap:8px' },
+        h('span', { className: 'dot ' + (k.active && !expired ? 'ok' : 'off'), title: !k.active ? 'Revoked' : (expired ? 'Expired' : 'Active') }),
+        h('span', { className: 'name', title: k.created_at ? 'Created ' + k.created_at + (k.created_from_role ? ' from role ' + k.created_from_role : '') : null, text: name }))),
+      h('td', {}, scopeNode(k)),
+      accessCell(k),
+      h('td', { className: k.rate_limit ? 'mono' : 'mono dim', style: 'white-space:nowrap', text: k.rate_limit || 'server default' }),
+      h('td', { className: 'dim' }, ips),
+      h('td', { style: 'white-space:nowrap' }, expiry),
+      h('td', { className: 'mono dim', style: 'white-space:nowrap', text: k.last_used_at || 'never' }),
       usageCell(k.usage),
       h('td', {}, h('div', { className: 'actions' },
         h('button', { type: 'button', className: 'btn ghost sm', text: 'Edit', onclick: function () { openApiKeyForm(name, k); } }),
         h('button', { type: 'button', className: 'btn ghost sm danger', text: 'Revoke', onclick: function () { deleteApiKey(name); } }))));
   });
-  box.appendChild(h('table', { className: 'grid' },
-    h('thead', {}, h('tr', {}, ['', 'Name', 'Connections', 'Queries / collections', 'Access', 'Expires', 'Rate limit', 'IPs', 'Created', 'Last used', 'Usage', ''].map(function (t) { return h('th', { text: t }); }))),
-    h('tbody', {}, rows)));
+  box.appendChild(h('div', { style: 'overflow-x:auto' }, h('table', { className: 'grid' },
+    h('thead', {}, h('tr', {}, ['Name', 'Scope', 'Access', 'Rate limit', 'IPs', 'Expires', 'Last used', 'Usage', ''].map(function (t) { return h('th', { text: t }); }))),
+    h('tbody', {}, rows))));
+}
+/** One "Scope" cell for a key or role: its connections and its query / collection grants as quiet dashed chips. */
+function scopeNode(entry) {
+  var tags = [];
+  if (entry.connections === '*') tags.push(h('span', { className: 'tag coll', text: 'all connections' }));
+  else (entry.connections || []).forEach(function (c) { tags.push(h('span', { className: 'tag coll', text: 'conn: ' + c })); });
+  queryGrantTags(entry).forEach(function (t) { tags.push(t); });
+  return tags.length ? h('div', { className: 'tags scope' }, tags) : h('span', { className: 'dim', text: '—' });
+}
+function accessCell(entry) {
+  var writeOps = entry.allow_writes && (entry.allowed_write_ops || []).length;
+  if (!entry.allow_writes) return h('td', { className: 'dim', style: 'white-space:nowrap', text: 'Read-only' });
+  if (writeOps) return h('td', { style: 'white-space:nowrap', title: entry.allowed_write_ops.join(', '),
+    text: 'Read/write (' + entry.allowed_write_ops.length + (entry.allowed_write_ops.length === 1 ? ' op' : ' ops') + ')' });
+  return h('td', { style: 'white-space:nowrap', text: 'Read/write' });
 }
 
 // ---- roles ----
@@ -1056,46 +1453,32 @@ function renderRoles() {
   var box = clear($('roles-table'));
   var names = Object.keys(rolesCache).sort();
   $('count-roles').textContent = names.length ? String(names.length) : '';
-  $('roles-sub').textContent = names.length ? names.length + (names.length === 1 ? ' role' : ' roles') : '';
   if (!names.length) {
     box.appendChild(h('div', { className: 'empty' }, h('strong', { text: 'No roles yet' }),
       h('span', { text: 'A role is a reusable template of connections, queries, write access, rate limit and allowed IPs — create an API key "from" a role instead of filling in every field by hand each time.' }),
       h('button', { type: 'button', className: 'btn primary', text: 'New role', onclick: function () { openRoleForm(); } })));
     return;
   }
+  var keysFrom = {};
+  Object.keys(apiKeysCache).forEach(function (kn) { var from = apiKeysCache[kn].created_from_role; if (from) keysFrom[from] = (keysFrom[from] || 0) + 1; });
   var rows = names.map(function (name) {
     var r = rolesCache[name];
-    var conns = r.connections === '*'
-      ? h('span', { className: 'tag', text: 'all connections' })
-      : h('div', { className: 'tags' }, (r.connections || []).length
-          ? r.connections.map(function (c) { return h('span', { className: 'tag', text: c }); })
-          : [h('span', { className: 'dim', text: 'none' })]);
-    var queries = queryGrantNode(r);
-    var writeOps = r.allow_writes && (r.allowed_write_ops || []).length;
-    var access = !r.allow_writes
-      ? h('td', { className: 'dim', text: 'Read-only' })
-      : writeOps
-        ? h('td', { title: r.allowed_write_ops.join(', '),
-                   text: 'Read/write (' + r.allowed_write_ops.length + (r.allowed_write_ops.length === 1 ? ' op' : ' ops') + ')' })
-        : h('td', { text: 'Read/write' });
-    var ips = (r.allowed_ips || []).length
-      ? h('span', { title: r.allowed_ips.join(', '), text: r.allowed_ips.length + (r.allowed_ips.length === 1 ? ' IP' : ' IPs') })
-      : h('span', { className: 'dim', text: 'any' });
-    return h('tr', {},
-      h('td', {}, h('span', { className: 'name', text: name }), r.example ? exampleBadge() : null),
-      h('td', {}, conns),
-      h('td', {}, queries),
-      access,
-      h('td', { className: r.rate_limit ? 'mono' : 'mono dim', text: r.rate_limit || 'server default' }),
-      h('td', {}, ips),
+    var conns = r.connections === '*' ? 'all connections' : ((r.connections || []).length ? r.connections.join(', ') : 'none');
+    return h('tr', { 'data-name': name },
+      h('td', {}, h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('span', { className: 'name', text: name }), r.example ? exampleBadge() : null)),
+      h('td', { className: 'dim', text: conns }),
+      h('td', {}, h('div', { className: 'tags scope' }, queryGrantTags(r).length ? queryGrantTags(r) : [h('span', { className: 'tag coll', text: '—' })])),
+      accessCell(r),
+      h('td', { className: r.rate_limit ? 'mono' : 'mono dim', style: 'white-space:nowrap', text: r.rate_limit || 'server default' }),
+      h('td', { className: 'mono', text: String(keysFrom[name] || 0), title: 'Keys created from this role' }),
       h('td', {}, h('div', { className: 'actions' },
         h('button', { type: 'button', className: 'btn ghost sm', text: 'New key from this', onclick: function () { openApiKeyForm(null, {}, name); } }),
         h('button', { type: 'button', className: 'btn ghost sm', text: 'Edit', onclick: function () { openRoleForm(name, r); } }),
         h('button', { type: 'button', className: 'btn ghost sm danger', text: 'Delete', onclick: function () { deleteRole(name); } }))));
   });
-  box.appendChild(h('table', { className: 'grid' },
-    h('thead', {}, h('tr', {}, ['Name', 'Connections', 'Queries / collections', 'Access', 'Rate limit', 'IPs', ''].map(function (t) { return h('th', { text: t }); }))),
-    h('tbody', {}, rows)));
+  box.appendChild(h('div', { style: 'overflow-x:auto' }, h('table', { className: 'grid' },
+    h('thead', {}, h('tr', {}, ['Name', 'Connections', 'Queries / collections', 'Access', 'Rate limit', 'Keys', ''].map(function (t) { return h('th', { text: t }); }))),
+    h('tbody', {}, rows))));
 }
 
 function openRoleForm(name, existing) {
@@ -1206,7 +1589,7 @@ async function loadAuditLog() {
   var box = $('auditlog-table');
   var data = await apiJson('audit_log');
   if (!data) {
-    $('auditlog-sub').textContent = '';
+    $('auditlog-count').textContent = '';
     clear(box).appendChild(h('div', { className: 'empty' }, h('strong', { text: 'Couldn’t load the audit log' }),
       h('span', { text: 'Only the admin key (QUERYAPIGATE_API_KEY) can view the audit log.' }),
       h('button', { type: 'button', className: 'btn sm', text: 'Retry', onclick: loadAuditLog })));
@@ -1226,22 +1609,46 @@ $('refresh-auditlog').onclick = loadAuditLog;
 $('auditlog-action-filter').onchange = renderAuditLog;
 $('auditlog-filter').oninput = renderAuditLog;
 
-function renderAuditLog() {
-  var box = clear($('auditlog-table'));
-  if (!auditLogCache.length) {
-    $('auditlog-sub').textContent = '';
-    box.appendChild(h('div', { className: 'empty' }, h('strong', { text: 'No administrative changes recorded yet' }),
-      h('span', { text: 'Creating or changing a connection, saved query or API key will appear here.' })));
-    return;
-  }
+function auditLimit() {
+  var rows = [];
+  (settingsData || []).forEach(function (sec) { rows = rows.concat(sec.rows); });
+  var row = rows.filter(function (r) { return r.env === 'QUERYAPIGATE_AUDIT_LOG_LIMIT'; })[0];
+  return row ? parseInt(row.value, 10) || 500 : 500;
+}
+function paintAuditSub() {
+  $('auditlog-sub').textContent = 'Administrative actions, newest first. Keeps the last ' + auditLimit() + ' entries.';
+}
+function auditFiltered() {
   var action = $('auditlog-action-filter').value;
   var q = $('auditlog-filter').value.trim().toLowerCase();
-  var entries = auditLogCache.filter(function (e) {
+  return auditLogCache.filter(function (e) {
     if (action && e.action !== action) return false;
     if (!q) return true;
     return [e.timestamp, e.actor, e.target].join(' ').toLowerCase().indexOf(q) !== -1;
   });
-  $('auditlog-sub').textContent = entries.length === auditLogCache.length
+}
+/** create-ish actions read green, delete-ish red, everything else neutral - the same three tones as the design. */
+function auditTone(action) {
+  if (/^(create|load|save)/.test(action || '')) return 'ok';
+  if (/^(delete|unload|revoke)/.test(action || '')) return 'bad';
+  return '';
+}
+$('export-auditlog').onclick = function () {
+  var entries = auditFiltered();
+  downloadBlob(new Blob([JSON.stringify(entries, null, 2) + '\n'], { type: 'application/json' }), 'queryapigate-audit-log.json');
+  toast('Exported ' + entries.length + (entries.length === 1 ? ' entry' : ' entries'));
+};
+function renderAuditLog() {
+  var box = clear($('auditlog-table'));
+  paintAuditSub();
+  if (!auditLogCache.length) {
+    $('auditlog-count').textContent = '';
+    box.appendChild(h('div', { className: 'empty' }, h('strong', { text: 'No administrative changes recorded yet' }),
+      h('span', { text: 'Creating or changing a connection, saved query or API key will appear here.' })));
+    return;
+  }
+  var entries = auditFiltered();
+  $('auditlog-count').textContent = entries.length === auditLogCache.length
     ? auditLogCache.length + (auditLogCache.length === 1 ? ' entry' : ' entries')
     : entries.length + ' of ' + auditLogCache.length + ' entries';
   if (!entries.length) {
@@ -1250,15 +1657,15 @@ function renderAuditLog() {
   }
   var rows = entries.map(function (e) {
     return h('tr', {},
-      h('td', { className: 'mono dim', text: e.timestamp || '' }),
-      h('td', {}, h('span', { className: 'name', text: e.actor || '-' })),
-      h('td', {}, h('span', { className: 'tag', text: e.action || '' })),
+      h('td', { className: 'mono dim', style: 'white-space:nowrap', text: e.timestamp || '' }),
+      h('td', { className: 'mono', text: e.actor || '-' }),
+      h('td', {}, h('span', { className: 'tag act ' + auditTone(e.action), text: e.action || '' })),
       h('td', {}, h('span', { className: 'name', text: e.target || '' })),
       h('td', {}, renderAuditChanges(e.changes)));
   });
-  box.appendChild(h('table', { className: 'grid' },
+  box.appendChild(h('div', { style: 'overflow-x:auto' }, h('table', { className: 'grid' },
     h('thead', {}, h('tr', {}, ['Time', 'Actor', 'Action', 'Target', 'Changes'].map(function (t) { return h('th', { text: t }); }))),
-    h('tbody', {}, rows)));
+    h('tbody', {}, rows))));
 }
 
 function auditValueText(v) {
@@ -1287,7 +1694,7 @@ function renderAuditChanges(changes) {
     var text = (v && typeof v === 'object' && !Array.isArray(v) && ('from' in v || 'to' in v))
       ? key + ': ' + auditValueText(v.from) + ' → ' + auditValueText(v.to)
       : key + ': ' + auditValueText(v);
-    return h('div', { className: 'mono', style: 'font-size:12px', text: text });
+    return h('div', { className: 'mono', style: 'font-size:12px;color:var(--ink-2)', text: text });
   }));
 }
 
@@ -1336,14 +1743,33 @@ async function loadMetrics() {
     return;
   }
   renderMetrics(parseMetricsText(await res.text()));
+  metricsAt = Date.now();
+  paintMetricsAge();
 }
 $('refresh-metrics').onclick = loadMetrics;
 
 function statTile(label, value, warn) {
-  return h('div', { className: 'panel stat-tile' },
+  return h('div', { className: 'stat-tile' },
     h('div', { className: 'label', text: label }),
     h('div', { className: 'value' + (warn ? ' warn' : ''), text: String(value) }));
 }
+/** One card of horizontal bars: label, a track filled in proportion to the largest value, and the number. */
+function barCard(title, rows, colorOf) {
+  var max = rows.reduce(function (m, r) { return Math.max(m, r.value); }, 0);
+  return h('div', { className: 'chart-card' }, h('h3', { text: title }), rows.map(function (r) {
+    var width = r.value ? Math.max(1, 100 * r.value / max) : 0;
+    return h('div', { className: 'bar-row' }, h('span', { className: 'bl', text: r.label }),
+      h('div', { className: 'bar-track' }, h('div', { className: 'bar-fill', style: 'width:' + width + '%;background:' + colorOf(r) })),
+      h('span', { className: 'bv', text: String(r.value) }));
+  }));
+}
+var metricsAt = null;
+function paintMetricsAge() {
+  if (metricsAt === null) { $('metrics-updated').textContent = ''; return; }
+  var secs = Math.round((Date.now() - metricsAt) / 1000);
+  $('metrics-updated').textContent = secs < 5 ? 'Updated just now' : 'Updated ' + (secs < 90 ? secs + 's' : Math.round(secs / 60) + ' min') + ' ago';
+}
+setInterval(paintMetricsAge, 5000);
 
 function renderMetrics(series) {
   var box = clear($('metrics-body'));
@@ -1368,13 +1794,13 @@ function renderMetrics(series) {
   var statusRows = ['2xx', '3xx', '4xx', '5xx'].map(function (c) { return { label: c, value: byStatusClass[c] || 0 }; })
     .filter(function (r) { return r.value > 0; });
   var byConnection = metricGroupSum(series, 'queryapigate_queries_total', 'connection');
-  var connRows = Object.keys(byConnection).sort().map(function (c) { return { label: c, value: byConnection[c] }; });
+  var connNamesAll = Array.from(new Set(Object.keys(connectionsCache).concat(Object.keys(byConnection)))).sort();
+  var connRows = connNamesAll.map(function (c) { return { label: c, value: byConnection[c] || 0 }; });
+  var statusColor = { '2xx': 'var(--accent)', '3xx': 'var(--accent)', '4xx': 'var(--warn)', '5xx': 'var(--danger)' };
 
   box.appendChild(h('div', { className: 'metrics-charts' },
-    statusRows.length ? h('div', { className: 'panel chart-panel' }, h('h3', { style: 'font-size:13px;margin-bottom:8px', text: 'Requests by status' }),
-      barChartSvg(statusRows, 'label', 'value')) : null,
-    connRows.length ? h('div', { className: 'panel chart-panel' }, h('h3', { style: 'font-size:13px;margin-bottom:8px', text: 'Queries by connection' }),
-      barChartSvg(connRows, 'label', 'value')) : null));
+    statusRows.length ? barCard('Requests by status', statusRows, function (r) { return statusColor[r.label]; }) : null,
+    connRows.length ? barCard('Queries by connection', connRows, function () { return 'var(--accent)'; }) : null));
 
   var errorsByConnection = {};
   series.filter(function (s) { return s.name === 'queryapigate_queries_total' && s.labels.status === 'error'; })
@@ -1392,13 +1818,13 @@ function renderMetrics(series) {
       var avgMs = count ? Math.round(1000 * (sumByConn[c] || 0) / count) : null;
       return h('tr', {},
         h('td', {}, h('span', { className: 'name', text: c })),
-        h('td', { className: 'mono', style: 'text-align:right', text: String(byConnection[c] || 0) }),
-        h('td', { className: 'mono', style: 'text-align:right', text: String(errorsByConnection[c] || 0) }),
-        h('td', { className: 'mono', style: 'text-align:right', text: avgMs === null ? '—' : avgMs + ' ms' }),
-        h('td', { className: 'mono', style: 'text-align:right', text: String(rowsByConnection[c] || 0) }));
+        h('td', { className: 'mono num', text: String(byConnection[c] || 0) }),
+        h('td', { className: 'mono num', text: String(errorsByConnection[c] || 0) }),
+        h('td', { className: 'mono num', text: avgMs === null ? '—' : avgMs + ' ms' }),
+        h('td', { className: 'mono num', text: String(rowsByConnection[c] || 0) }));
     });
-    box.appendChild(h('div', { className: 'panel' }, h('table', { className: 'grid' },
-      h('thead', {}, h('tr', {}, ['Connection', 'Queries', 'Errors', 'Avg latency', 'Rows returned'].map(function (t) { return h('th', { text: t }); }))),
+    box.appendChild(h('div', { className: 'panel', style: 'overflow-x:auto' }, h('table', { className: 'grid' },
+      h('thead', {}, h('tr', {}, ['Connection', 'Queries', 'Errors', 'Avg latency', 'Rows returned'].map(function (t, i) { return h('th', { className: i ? 'num' : '', text: t }); }))),
       h('tbody', {}, tRows))));
   }
 }
@@ -1586,7 +2012,7 @@ function impactNodeMany(moves) {
 }
 function impactNode(from, to) { return impactNodeMany([[from, to]]); }
 /** Query names plus collection grants for a key/role row - one renderer for both tables, so they cannot drift apart. */
-function queryGrantNode(entry) {
+function queryGrantTags(entry) {
   var tags = [];
   if (entry.queries === '*') tags.push(h('span', { className: 'tag', text: 'all queries' }));
   else (entry.queries || []).forEach(function (q) {
@@ -1599,6 +2025,10 @@ function queryGrantNode(entry) {
     var n = known ? known.queries.length : 0;
     tags.push(h('span', { className: 'tag coll', title: 'Every query in collection ' + c + ' (' + n + ' now, including any added later) — read-only', text: c + '/' }));
   });
+  return tags;
+}
+function queryGrantNode(entry) {
+  var tags = queryGrantTags(entry);
   return tags.length ? h('div', { className: 'tags' }, tags) : h('span', { className: 'dim', text: '—' });
 }
 /** Checkboxes over the existing collections for a key/role form; a name the entry already holds stays listed even when it has emptied. */
@@ -1632,12 +2062,12 @@ function renderExamplesStrip() {
   var st = examplesState;
   if (!st.loaded && !st.partial) { box.hidden = true; return; }
   box.hidden = false;
-  box.appendChild(h('span', { text: st.partial
+  box.appendChild(exampleBadge());
+  box.appendChild(h('span', { style: 'flex:1', text: st.partial
     ? 'The example APIs are only partly loaded (an interrupted load).'
-    : 'Example APIs are loaded: ' + st.queries.length + ' queries in ' + st.collections.length + ' collections, four roles and an “examples” connection. Each is marked “example”; removing them touches nothing else.' }));
-  box.appendChild(h('span', { className: 'spacer', style: 'flex:1' }));
-  if (st.partial) box.appendChild(h('button', { type: 'button', className: 'btn sm', text: 'Finish loading', onclick: loadExampleData }));
-  box.appendChild(h('button', { type: 'button', className: 'btn sm danger', text: 'Remove examples', onclick: removeExamples }));
+    : 'Example APIs are loaded: ' + st.queries.length + ' queries in ' + st.collections.length + ' collections, four roles and an “examples” connection. Removing them touches nothing else.' }));
+  if (st.partial) box.appendChild(h('button', { type: 'button', className: 'btn sm outlined', text: 'Finish loading', onclick: loadExampleData }));
+  box.appendChild(h('button', { type: 'button', className: 'btn sm outlined danger', text: 'Remove examples', onclick: removeExamples }));
 }
 async function loadExampleData() {
   var res = await apiJson('examples', { method: 'POST' });
@@ -1661,6 +2091,7 @@ function latestOf(f) { return f.versions[f.versions.length - 1] || {}; }
 function findFile(name) { return filesCache.filter(function (f) { return f.filename === name; })[0] || null; }
 function lastRun(v) { var hs = v.execution_history || []; return hs[hs.length - 1] || null; }
 
+var queriesInitialised = false;
 async function loadQueries(selectName) {
   await loadCollections();
   var data = await apiJson('list_files');
@@ -1672,38 +2103,52 @@ async function loadQueries(selectName) {
   filesCache = (data.files || []).slice().sort(function (a, b) { return a.filename < b.filename ? -1 : 1; });
   contentCache = {};
   $('count-queries').textContent = filesCache.length ? String(filesCache.length) : '';
-  $('queries-sub').textContent = filesCache.length ? filesCache.reduce(function (n, f) { return n + f.versions.length; }, 0) + ' versions' : '';
+  paintQueriesSub();
   if (selectName !== undefined) selected.name = selectName;
+  if (!queriesInitialised && filesCache.length) {
+    // First load: open the first query, with only its collection expanded (the rest are one click away).
+    queriesInitialised = true;
+    var ordered = filesCache.slice().sort(function (a, b) { return ((a.collection || '\uffff') + a.filename) < ((b.collection || '\uffff') + b.filename) ? -1 : 1; });
+    if (!selected.name) { selected.name = ordered[0].filename; selected.version = latestOf(ordered[0]).version; }
+    var chosen = findFile(selected.name);
+    filesCache.forEach(function (x) { if (x.collection) collapsedGroups[x.collection] = !(chosen && chosen.collection === x.collection); });
+  }
   var f = selected.name && findFile(selected.name);
   if (!f) { selected.name = null; selected.version = null; }
   else if (!f.versions.some(function (v) { return v.version === selected.version; })) selected.version = latestOf(f).version;
   renderQueryList();
   renderDetail();
 }
+function paintQueriesSub() {
+  var sub = clear($('queries-sub'));
+  var versions = filesCache.reduce(function (n, f) { return n + f.versions.length; }, 0);
+  var collections = Array.from(new Set(filesCache.map(function (f) { return f.collection; }).filter(Boolean))).length;
+  sub.appendChild(document.createTextNode((filesCache.length ? versions + (versions === 1 ? ' version' : ' versions') +
+    (collections ? ' across ' + collections + (collections === 1 ? ' collection' : ' collections') : '') + '. ' : '') + 'Each one is published at '));
+  sub.appendChild(h('code', { text: '/q/<name>' }));
+  sub.appendChild(document.createTextNode('.'));
+}
 function queryItem(f) {
-  var l = latestOf(f), run = lastRun(l);
-  return h('button', { type: 'button', className: 'qitem' + (f.filename === selected.name ? ' sel' : ''), onclick: function () {
+  var l = latestOf(f);
+  return h('button', { type: 'button', 'data-name': f.filename, className: 'qitem' + (f.filename === selected.name ? ' sel' : ''), onclick: function () {
     selected.name = f.filename; selected.version = l.version; renderQueryList(); renderDetail(); } },
     h('div', { className: 'qi-top' },
       h('span', { className: 'name', text: f.filename }),
-      h('span', { className: 'tag', text: 'v' + l.version }),
-      run ? h('span', { className: 'dot ' + (run.status === 'success' ? 'ok' : 'bad'), title: 'Last run ' + run.executed_at + ' · ' + run.status }) : null,
-      h('span', { className: 'qi-conn', text: l.connection_name || '' })),
-    l.description ? h('div', { className: 'qi-desc', text: l.description }) : null,
-    (l.tags || []).length ? h('div', { className: 'tags' }, l.tags.map(function (t) { return h('span', { className: 'tag', text: t }); })) : null);
+      h('span', { className: 'tag v', text: 'v' + l.version })),
+    l.description ? h('div', { className: 'qi-desc', text: l.description }) : null);
 }
-function groupHeader(name, count, open) {
+function groupBlock(name, count, open, items) {
   var known = name ? collectionsCache.collections[name] : null;
   var reach = known ? known.keys.length : 0;
-  // Two rows - the name (never truncated by its own controls) and, for a real collection, a quiet line of actions.
   return h('div', { className: 'qgroup' },
     h('button', { type: 'button', className: 'qg-toggle', 'aria-expanded': open ? 'true' : 'false', onclick: function () {
       collapsedGroups[name] = open; renderQueryList(); } },
-      h('span', { text: open ? '▾' : '▸' }), h('span', { className: 'qg-name', text: name || 'No collection' }), h('span', { className: 'count', text: String(count) })),
-    name ? h('div', { className: 'qg-meta' },
-      h('span', { className: 'qg-reach', title: reach ? 'Keys granted this collection: ' + known.keys.join(', ') : 'No key is granted this collection', text: reach + (reach === 1 ? ' key' : ' keys') }),
-      h('button', { type: 'button', className: 'btn ghost sm', text: 'Postman', title: 'Download this collection as a Postman Collection file (one request per query; holds no API key)', onclick: function () { downloadPostman(name); } }),
-      h('button', { type: 'button', className: 'btn ghost sm', text: 'Rename', title: 'Rename this collection, carrying every key and role grant with it', onclick: function () { openRenameCollectionForm(name); } })) : null);
+      h('span', { className: 'caret', text: open ? '▾' : '▸' }), h('span', { className: 'qg-name', text: name || 'No collection' }), h('span', { className: 'qg-n', text: String(count) })),
+    open ? items : null,
+    open && name ? h('div', { className: 'qg-foot' },
+      h('span', { title: reach ? 'Keys granted this collection: ' + known.keys.join(', ') : 'No key is granted this collection', text: reach + (reach === 1 ? ' key' : ' keys') }),
+      h('a', { href: '#', title: 'Download this collection as a Postman Collection file (one request per query; holds no API key)', text: 'Postman', onclick: function (e) { e.preventDefault(); downloadPostman(name); } }),
+      h('a', { href: '#', title: 'Rename this collection, carrying every key and role grant with it', text: 'Rename', onclick: function (e) { e.preventDefault(); openRenameCollectionForm(name); } })) : null);
 }
 function renderQueryList() {
   var box = clear($('queries-table'));
@@ -1728,8 +2173,7 @@ function renderQueryList() {
   if (groups['']) names.push('');
   names.forEach(function (c) {
     var open = !!q || !collapsedGroups[c];
-    box.appendChild(groupHeader(c, groups[c].length, open));
-    if (open) groups[c].forEach(function (f) { box.appendChild(queryItem(f)); });
+    box.appendChild(groupBlock(c, groups[c].length, open, groups[c].map(queryItem)));
   });
 }
 $('query-filter').oninput = renderQueryList;
@@ -1757,27 +2201,37 @@ function renderDetail() {
   var isLatest = v.version === latest.version;
   var history = v.execution_history || [];
 
-  var versionSwitch = h('div', { className: 'versions', role: 'group', 'aria-label': 'Version' }, f.versions.map(function (x) {
-    return h('button', { type: 'button', className: x.version === v.version ? 'on' : '', text: 'v' + x.version,
-      title: x.version === latest.version ? 'Latest version' : 'Version ' + x.version,
-      onclick: function () { selected.version = x.version; renderDetail(); } });
-  }));
+  var versionNode = f.versions.length > 1
+    ? h('div', { className: 'versions', role: 'group', 'aria-label': 'Version' }, f.versions.map(function (x) {
+        return h('button', { type: 'button', className: x.version === v.version ? 'on' : '', text: 'v' + x.version,
+          title: x.version === latest.version ? 'Latest version' : 'Version ' + x.version,
+          onclick: function () { selected.version = x.version; renderDetail(); } });
+      }))
+    : h('span', { className: 'vbadge', text: 'v' + v.version });
+  var status = String(v.status || 'active');
+  var deleteBtn = h('button', { type: 'button', className: 'btn md danger', text: 'Delete…', title: 'Delete this version or the whole query', onclick: function () {
+    var items = [];
+    if (f.versions.length > 1) items.push({ label: 'Delete v' + v.version, title: 'DELETE /saved_sql/' + f.filename + '?version=' + v.version,
+      run: function () { deleteQueryVersion(f.filename, v.version, f.versions.length); } });
+    items.push({ label: f.versions.length > 1 ? 'Delete query (all ' + f.versions.length + ' versions)' : 'Delete query', run: function () { deleteQuery(f.filename); } });
+    openMenu(deleteBtn, items);
+  } });
+  var tagsText = (v.tags || []).join(', ');
   var head = h('div', { className: 'd-head' },
     h('div', { className: 'd-title' },
       h('h3', { text: f.filename }),
-      versionSwitch,
-      isLatest ? h('span', { className: 'hint', text: 'latest' }) : h('span', { className: 'hint', text: 'older version' }),
+      versionNode,
+      h('span', { className: 'hint', text: isLatest ? 'latest' : 'older version' }),
+      h('span', { className: 'pill ' + (status === 'active' ? 'ok' : 'off') }, h('i'), status.charAt(0).toUpperCase() + status.slice(1)),
       h('span', { className: 'spacer' }),
-      h('button', { type: 'button', className: 'btn sm', text: 'New version', onclick: function () { openQueryForm(f.filename, v); } }),
-      h('button', { type: 'button', className: 'btn sm', text: 'Move…', title: 'File this query under a collection (PUT /saved_sql/' + f.filename + '/collection)', onclick: function () { openMoveForm(f); } }),
-      h('button', { type: 'button', className: 'btn sm danger', text: 'Delete v' + v.version, title: 'DELETE /saved_sql/' + f.filename + '?version=' + v.version,
-        onclick: function () { deleteQueryVersion(f.filename, v.version, f.versions.length); } }),
-      h('button', { type: 'button', className: 'btn sm danger', text: 'Delete query', onclick: function () { deleteQuery(f.filename); } })),
+      h('button', { type: 'button', className: 'btn md', text: 'New version', onclick: function () { openQueryForm(f.filename, v); } }),
+      h('button', { type: 'button', className: 'btn md', text: 'Move…', title: 'File this query under a collection (PUT /saved_sql/' + f.filename + '/collection)', onclick: function () { openMoveForm(f); } }),
+      deleteBtn),
     v.description ? h('p', { className: 'd-desc', text: v.description }) : null,
     h('dl', { className: 'meta' },
       metaItem('connection', v.connection_name || '—'), metaItem('collection', f.collection || '—'), metaItem('author', v.author || '—'),
       metaItem('modified', v.last_modified_at || v.created_at || '—'), metaItem('status', v.status || '—'),
-      (v.tags || []).length ? h('div', {}, h('dt', { text: 'tags' }), h('dd', {}, h('span', { className: 'tags' }, v.tags.map(function (t) { return h('span', { className: 'tag', text: t }); })))) : null),
+      tagsText ? metaItem('tags', tagsText) : null),
     h('div', { className: 'subtabs', role: 'tablist' },
       subtab('run', 'Run'), subtab('sql', 'SQL'),
       subtab('history', 'History', h('span', { className: 'count', text: history.length ? String(history.length) : '' })),
@@ -1790,7 +2244,36 @@ function renderDetail() {
   else if (selected.tab === 'curl') renderCurlTab(body, f, v, isLatest);
   else renderRunTab(body, f, v, isLatest);
 }
-function metaItem(k, val) { return h('div', {}, h('dt', { text: k }), h('dd', { text: String(val) })); }
+function metaItem(k, val) { return h('div', {}, h('dt', { text: k }), h('dd', { title: String(val), text: String(val) })); }
+/** A small popover menu under `anchor`; closes on any outside click or Escape. items: [{label, title, run}]. */
+function openMenu(anchor, items) {
+  var old = document.getElementById('popmenu');
+  if (old) old.remove();
+  var box = anchor.getBoundingClientRect();
+  var menu = h('div', { id: 'popmenu', className: 'menu', role: 'menu', style: 'top:' + (box.bottom + 4) + 'px;right:' + Math.max(8, window.innerWidth - box.right) + 'px' },
+    items.map(function (it) {
+      return h('button', { type: 'button', role: 'menuitem', title: it.title || null, text: it.label, onclick: function () { close(); it.run(); } });
+    }));
+  function close() { menu.remove(); document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', esc, true); }
+  function outside(e) { if (!menu.contains(e.target)) close(); }
+  function esc(e) { if (e.key === 'Escape') close(); }
+  document.body.appendChild(menu);
+  setTimeout(function () { document.addEventListener('mousedown', outside, true); document.addEventListener('keydown', esc, true); }, 0);
+}
+/** Read-only code with line numbers, tokens coloured through the same highlighter as the editors. */
+function codeBox(sql) {
+  var lines = String(sql).split('\n');
+  var box = h('div', { className: 'codebox' });
+  var pre = h('div', { className: 'ln-rows' });
+  lines.forEach(function (line, i) {
+    var text = h('span', { className: 'ln-t' });
+    highlightInto(text, line);
+    if (!line) text.textContent = ' ';
+    pre.appendChild(h('div', { className: 'ln-r' }, h('span', { className: 'ln-n', text: String(i + 1) }), text));
+  });
+  box.appendChild(pre);
+  return box;
+}
 function subtab(key, label, extra) {
   return h('button', { type: 'button', role: 'tab', 'data-subtab': key, className: selected.tab === key ? 'on' : '', onclick: function () { selected.tab = key; renderDetail(); } }, label, extra || null);
 }
@@ -1802,15 +2285,15 @@ async function renderSqlTab(body, f, v) {
   if (!c) return;
   var data = c.parsed && c.parsed[String(v.version)];
   var sql = data && data.sql_query;
-  var codeEl = h('pre', { className: 'code' });
-  if (sql !== undefined && sql !== null) highlightInto(codeEl, String(sql)); else codeEl.textContent = c.raw;
+  var shown = sql !== undefined && sql !== null ? String(sql) : c.raw;
+  var codeEl = codeBox(shown);
   var raw = h('pre', { className: 'code', text: c.raw });
   raw.hidden = true;
   var toggle = h('button', { type: 'button', className: 'btn sm ghost', text: 'Show raw file', onclick: function () {
     raw.hidden = !raw.hidden; toggle.textContent = raw.hidden ? 'Show raw file' : 'Hide raw file'; } });
-  body.appendChild(h('div', { className: 'toolbar', style: 'margin:0' }, h('p', { className: 'sub-h', text: 'SQL · v' + v.version }), h('span', { className: 'spacer' }),
-    h('button', { type: 'button', className: 'btn sm ghost', text: 'Copy', onclick: function () { copyText(sql || c.raw); } }), toggle));
   body.appendChild(codeEl);
+  body.appendChild(h('div', { className: 'toolbar', style: 'margin:-6px 0 0' },
+    h('button', { type: 'button', className: 'btn sm ghost', text: 'Copy SQL', onclick: function () { copyText(shown); } }), toggle));
   body.appendChild(raw);
   var qp = v.query_parameters || {};
   var keys = Object.keys(qp);
@@ -1830,13 +2313,6 @@ async function renderSqlTab(body, f, v) {
 function renderHistoryTab(body, v) {
   var hs = (v.execution_history || []).slice().reverse();
   if (!hs.length) { body.appendChild(h('div', { className: 'empty' }, h('strong', { text: 'No runs recorded' }), h('span', { text: 'Runs of v' + v.version + ' through /q/ appear here.' }))); return; }
-  var ok = hs.filter(function (x) { return x.status === 'success'; });
-  var durations = ok.map(function (x) { return Number(x.duration_ms); }).filter(function (n) { return !isNaN(n); });
-  body.appendChild(h('div', { className: 'resbar', style: 'border:0;padding:0' }, h('span', { className: 'stat' },
-    h('span', {}, h('b', { text: String(hs.length) }), ' runs'),
-    h('span', {}, h('b', { text: String(ok.length) }), ' ok · ', h('b', { text: String(hs.length - ok.length) }), ' failed'),
-    durations.length ? h('span', {}, 'avg ', h('b', { text: Math.round(durations.reduce(function (a, b) { return a + b; }, 0) / durations.length) + ' ms' })) : null)));
-
   var statusSelect = h('select', {},
     h('option', { value: '', text: 'All statuses' }),
     h('option', { value: 'success', text: 'Success' }),
@@ -1858,19 +2334,18 @@ function renderHistoryTab(body, v) {
     clear(tableBox);
     if (!rows.length) { tableBox.appendChild(h('div', { className: 'empty' }, h('span', { text: 'No runs match this filter.' }))); return; }
     tableBox.appendChild(h('table', { className: 'grid' },
-      h('thead', {}, h('tr', {}, ['', 'Executed at', 'Connection', 'Caller', 'Rows', 'Duration', 'Request ID', 'Error'].map(function (t) { return h('th', { text: t }); }))),
+      h('thead', {}, h('tr', {}, ['', 'Executed at', 'Caller', 'Rows', 'Duration', 'Request ID', 'Error'].map(function (t, i) { return h('th', { className: i === 3 || i === 4 ? 'num' : '', text: t }); }))),
       h('tbody', {}, rows.map(function (x) {
         var good = x.status === 'success';
         return h('tr', {},
-          h('td', { style: 'width:28px;padding-right:0' }, h('span', { className: 'dot ' + (good ? 'ok' : 'bad'), title: String(x.status || '') })),
-          h('td', { className: 'mono', text: String(x.executed_at || '') }),
-          h('td', { className: 'mono', text: String(x.connection_name || '') }),
+          h('td', { style: 'width:20px;padding-right:0' }, h('span', { className: 'dot ' + (good ? 'ok' : 'bad'), title: String(x.status || '') })),
+          h('td', { className: 'mono dim', style: 'white-space:nowrap', title: x.connection_name ? 'connection: ' + x.connection_name : null, text: String(x.executed_at || '') }),
           h('td', { className: 'mono', text: String(x.key_name || '') }),
-          h('td', { className: 'mono', style: 'text-align:right', text: x.rows === undefined ? '' : String(x.rows) }),
-          h('td', { className: 'mono', style: 'text-align:right', text: x.duration_ms === undefined ? '' : x.duration_ms + ' ms' }),
+          h('td', { className: 'mono num', text: x.rows === undefined || x.rows === null ? '—' : String(x.rows) }),
+          h('td', { className: 'mono num', text: x.duration_ms === undefined ? '' : x.duration_ms + ' ms' }),
           h('td', { className: 'mono dim', title: String(x.request_id || ''), style: 'max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', text: String(x.request_id || '') }),
           h('td', { style: 'color:var(--danger);white-space:normal;word-break:break-word;max-width:320px',
-                   text: x.error ? String(x.error) : '' }));
+                   text: x.error ? String(x.error) : '—' }));
       }))));
   }
   statusSelect.onchange = paint;
@@ -1914,15 +2389,16 @@ async function renderRunTab(body, f, v, isLatest) {
       [p.description, bounds].filter(Boolean).join(' · ') || null,
       [sch.type ? h('span', { className: 'type', text: String(sch.type) }) : null, p.required ? h('span', { className: 'req', text: '*' }) : null]);
   }));
-  var connSelect = h('select', { id: 'rq-connection' });
+  var connSelect = h('select', { id: 'rq-connection', 'aria-label': 'Connection' });
   connectionOptions(connSelect, true, 'saved: ' + (v.connection_name || 'none'));
-  var formatSelect = h('select', { id: 'rq-format' }, ['json', 'csv', 'tsv', 'xml', 'yaml', 'ndjson', 'xlsx'].map(function (x) { return h('option', { value: x, text: x }); }));
-  var sizeSelect = h('select', { id: 'rq-page-size' }, [10, 25, 50, 100, 500].map(function (n) { return h('option', { value: String(n), text: String(n) }); }));
+  var formatSelect = h('select', { id: 'rq-format', 'aria-label': 'Format' }, ['json', 'csv', 'tsv', 'xml', 'yaml', 'ndjson', 'xlsx'].map(function (x) { return h('option', { value: x, text: x }); }));
+  formatSelect.value = prefs.format;
+  var sizeSelect = h('select', { id: 'rq-page-size', 'aria-label': 'Page size' }, [10, 25, 50, 100, 500].map(function (n) { return h('option', { value: String(n), text: n + ' rows' }); }));
   var statusBox = h('div', { className: 'resbar' }), resultsBox = h('div', { className: 'res-body' });
   var resultsPanel = h('div', { className: 'panel' }, statusBox, resultsBox);
   resultsPanel.hidden = true;
   var page = 1;
-  var runBtn = h('button', { type: 'submit', className: 'btn primary', text: 'Run' });
+  var runBtn = h('button', { type: 'submit', className: 'btn primary md', style: 'padding:0 16px', text: 'Run' });
   var url = 'q/' + enc(f.filename);
   async function run() {
     var query = params.map(function (p) {
@@ -1943,11 +2419,10 @@ async function renderRunTab(body, f, v, isLatest) {
   }
   var form = h('form', { novalidate: true, style: 'display:flex;flex-direction:column;gap:14px', onsubmit: function (e) { e.preventDefault(); page = 1; run(); } },
     params.length ? grid : h('div', { className: 'hint', text: 'No parameters — this query runs as-is.' }),
-    h('div', { className: 'run-row' },
-      field('rq-connection', 'Connection', connSelect), field('rq-format', 'Format', formatSelect), field('rq-page-size', 'Page size', sizeSelect),
-      h('span', { className: 'spacer' }),
-      h('code', { className: 'dim hide-sm', style: 'align-self:center', text: 'GET /' + url + (isLatest ? '' : '?version=' + v.version) }),
-      runBtn));
+    h('div', { className: 'get-row' },
+      h('span', { className: 'method', text: 'GET' }),
+      h('span', { className: 'endpoint', title: '/' + url, text: '/' + url + (isLatest ? '' : '?version=' + v.version) }),
+      connSelect, formatSelect, sizeSelect, runBtn));
   body.appendChild(form);
   body.appendChild(resultsPanel);
 }
@@ -1972,9 +2447,8 @@ async function renderCurlTab(body, f, v, isLatest) {
   if (selected.name !== f.filename || selected.tab !== 'curl') return;
   clear(body);
   var cmd = asSavedQueryCurl(f.filename, params, isLatest ? null : v.version);
-  body.appendChild(h('div', { className: 'toolbar', style: 'margin:0' }, h('p', { className: 'sub-h', text: 'curl' }), h('span', { className: 'spacer' }),
-    h('button', { type: 'button', className: 'btn sm ghost', text: 'Copy', onclick: function () { copyText(cmd); } })));
-  body.appendChild(h('pre', { className: 'code', text: cmd }));
+  body.appendChild(h('pre', { className: 'curlbox', text: cmd }));
+  body.appendChild(h('div', {}, h('button', { type: 'button', className: 'btn md', text: 'Copy command', onclick: function () { copyText(cmd); } })));
   if (params.length) body.appendChild(h('div', { className: 'hint', text: 'Replace the <placeholder> value(s) with real parameters before running it.' }));
 }
 
@@ -2642,12 +3116,13 @@ function renderRunHistory() {
 }
 
 // ---- startup ----
-function refreshAll() { loadConnections(); loadQueries(); loadApiKeys(); loadRoles(); loadAuditLog(); loadMetrics(); loadExamples(); }
+function refreshAll() { loadConnections(); loadQueries(); loadApiKeys(); loadRoles(); loadAuditLog(); loadMetrics(); loadExamples(); loadSettings(); }
 apiFetch('health').then(function (res) { return res.ok ? res.json() : null; }).then(function (info) {
   $('health-dot').className = 'dot ' + (info && info.status === 'ok' ? 'ok' : 'bad');
   $('version').textContent = info ? 'v' + info.version : 'unreachable';
 }, function () { $('health-dot').className = 'dot bad'; $('version').textContent = 'unreachable'; });
 try { var lastTab = sessionStorage.getItem('queryapigate-ui-tab'); if (lastTab && $('tab-' + lastTab)) showTab(lastTab); } catch (e) {}
+applyPrefs();
 renderRunHistory();
 refreshAll();
 </script>

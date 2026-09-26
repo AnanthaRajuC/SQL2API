@@ -868,6 +868,22 @@ class SavedQueryOpenApiTests(ApiTestCase):
                       'sessionStorage', 'href="docs"'):
             self.assertIn(marker, page, marker)
 
+    def test_admin_ui_has_a_sidebar_and_a_settings_screen(self):
+        page = self.client.get('/ui').get_data(as_text=True)
+        for marker in ('id="side"', 'id="side-toggle"', 'id="crumbs"', 'data-tab="settings"', 'id="tab-settings"',
+                       'id="settings-body"', "apiJson('settings')", 'queryapigate-ui-prefs',
+                       # the parts of the design that must not silently go missing
+                       'Search queries, connections, keys', 'id="palette"', 'id="key-panel"', 'id="conn-tabs"',
+                       'href="docs"', 'href="openapi.json"', 'Databases this gateway can run saved queries against.',
+                       'Filter by name, description, tag', 'Filter by name, type, host', 'id="export-auditlog"',
+                       'Copy as .env'):
+            self.assertIn(marker, page, marker)
+        # every section a sidebar button points at exists, and every section is reachable from the sidebar
+        import re
+        buttons = set(re.findall(r'data-tab="(\w+)"', page))
+        sections = set(re.findall(r'<section id="tab-(\w+)"', page))
+        self.assertEqual(buttons, sections)
+
     def test_admin_ui_never_assigns_innerhtml(self):
         # the DOM-builder helper (h()) is the only place server response data is turned into elements;
         # assigning .innerHTML anywhere would bypass that and risk rendering a cell's content as markup
