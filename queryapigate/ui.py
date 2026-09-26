@@ -219,8 +219,8 @@ UI_HTML = r"""<!doctype html>
   /* ---- tables ---- */
   table.grid { width: 100%; border-collapse: separate; border-spacing: 0; }
   table.grid th { position: sticky; top: 0; z-index: 1; text-align: left; font: 600 11px var(--sans); letter-spacing: 0.03em; text-transform: uppercase;
-    color: var(--ink-3); background: var(--surface); padding: 9px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  table.grid td { padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    color: var(--ink-3); background: var(--surface); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.grid td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   table.grid td.num, table.grid th.num { text-align: right; }
   table.grid tbody tr:last-child td { border-bottom: 0; }
   table.grid tbody tr:hover td { background: var(--surface-2); }

@@ -14,8 +14,8 @@
 [**Full documentation**](https://AnanthaRajuC.github.io/QueryAPIGate/)
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=aiVbAkA2LS8">
-    <img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/demo-thumbnail.png" alt="Watch the 60-second demo: saved SQL queries as REST endpoints, scoped API keys, and the Move preview showing which keys gain or lose access" width="640">
+  <a href="https://www.youtube.com/watch?v=WWImFj4m95o">
+    <img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/demo-thumbnail.png" alt="Watch the demo: saved SQL queries as REST endpoints, scoped API keys, and the Move preview showing which keys gain or lose access" width="640">
   </a>
 </p>
 
@@ -49,7 +49,7 @@ Crimson Garden,Comedy,PG-13,631,2
 <tr>
 <td width="25%">
 <a href="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/connections.png">
-<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/connections.png" alt="Connections tab listing ClickHouse, MySQL, PostgreSQL and SQLite connections with active/inactive status and each connection's live usage: queries run, failures and average latency">
+<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/connections.png" alt="Connections screen with a sidebar and All/Active/Inactive tabs, listing ClickHouse, MySQL, PostgreSQL and SQLite connections with active/inactive status and each connection's live usage: queries run, failures and average latency">
 </a>
 <br><sub>Manage connections across every supported database, with live usage per connection</sub>
 </td>
@@ -61,13 +61,13 @@ Crimson Garden,Comedy,PG-13,631,2
 </td>
 <td width="25%">
 <a href="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/api-keys.png">
-<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/api-keys.png" alt="API keys tab showing keys created from roles and scoped to a collection (shown as a dashed name/ tag), an expiring partner key, per-key rate limits, and each key's last-used time and live usage">
+<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/api-keys.png" alt="API keys screen showing keys created from roles and scoped to a collection (shown as a dashed name/ tag), an expiring partner key, per-key rate limits, and each key's last-used time and live usage">
 </a>
 <br><sub>Per-key permissions: connections, specific saved queries, expiry, rate limits - and what each key has actually done</sub>
 </td>
 <td width="25%">
 <a href="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/roles.png">
-<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/roles.png" alt="Roles tab listing reusable permission templates - connections, read/write access, rate limit and IP allowlisting - with a New key from this shortcut">
+<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/roles.png" alt="Roles screen listing reusable permission templates - connections, read/write access, rate limit and IP allowlisting - with a New key from this shortcut">
 </a>
 <br><sub>Named roles: a reusable grant template, copied onto a key once at creation</sub>
 </td>
@@ -78,19 +78,19 @@ Crimson Garden,Comedy,PG-13,631,2
 <tr>
 <td width="33%">
 <a href="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/saved-query-history.png">
-<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/saved-query-history.png" alt="A saved query's History tab: every run with its time, connection, calling API key, rows, duration and request ID, with a status filter and search box">
+<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/saved-query-history.png" alt="A saved query's History tab: every run with its time, calling API key, rows, duration and request ID, with a status filter and search box">
 </a>
 <br><sub>Run history per saved query: who called it, how long it took, and the request ID to find it in the logs</sub>
 </td>
 <td width="33%">
 <a href="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/audit-log.png">
-<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/audit-log.png" alt="Audit Log tab listing every administrative change - saved queries, roles and API keys created or updated - with an action filter and search box">
+<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/audit-log.png" alt="Audit log screen listing every administrative change - saved queries, roles and API keys created or updated - with an action filter and search box">
 </a>
 <br><sub>A durable audit log of every configuration change, filterable by action, actor and target</sub>
 </td>
 <td width="33%">
 <a href="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/metrics.png">
-<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/metrics.png" alt="Metrics tab with stat tiles for requests, error rate, active queries, pool and rate limiting, bar charts of requests by status and queries by connection, and a per-connection latency table">
+<img src="https://raw.githubusercontent.com/AnanthaRajuC/QueryAPIGate/main/documentation/screenshots/metrics.png" alt="Metrics screen with stat tiles for requests, error rate, active queries, pool and rate limiting, bars for requests by status and queries by connection, and a per-connection latency table">
 </a>
 <br><sub>Live metrics with no Prometheus required - or import the bundled Grafana dashboard for history</sub>
 </td>
