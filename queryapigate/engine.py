@@ -1,0 +1,166 @@
+"""Ties the pieces together: look up the connection, validate the SQL, run it, wrap the page."""
+import hashlib
+import logging
+import time
+
+from . import config, metrics, store
+from .errors import ApiError
+from .formats import ResultSetDTO
+from .pool import get_pool
+from .runners import RUNNERS, STREAM_RUNNERS
+from .sqltools import validate_sql
+
+log = logging.getLogger('queryapigate')
+
+
+def _sql_hash(sql):
+    """A correlation key for "did this same query run elsewhere/before" without re-reading the SQL text
+    itself - same idea (and same full-length sha256 hex) pool.py and cache.py already use for their own
+    keys. Logged *alongside* the full SQL text (see the log.info() calls below), not instead of it - the
+    hash is for a log aggregator to filter/group on; the full text is still there for a human reading logs
+    locally."""
+    return hashlib.sha256(sql.encode('utf-8')).hexdigest()
+
+
+def execute_sql(sql, connection_name, limit, offset, params=None, timeout=None, allow_writes=True, key_name='-',
+                allowed_write_ops=None):
+    """Run ``sql`` on a named connection and return the requested page as a ResultSetDTO.
+
+    ``allow_writes`` is the caller's own permission (e.g. a scoped API key); the connection is only ever
+    writable when both that *and* the server-wide QUERYAPIGATE_ALLOW_WRITES allow it - a caller can narrow the
+    server's setting, never widen it. ``key_name`` is only for the query counter in ``/metrics`` (audit: which
+    key touched which connection); it plays no part in what the query is allowed to do. ``allowed_write_ops``
+    is a key's own narrower allow-list of write keywords, if it has one - see ``sqltools.validate_sql()``.
+    """
+    details = store.get_connection(connection_name)
+    effective_allow_writes = config.allow_writes() and allow_writes
+    sql = validate_sql(sql, dialect=details['db'], allow_writes=effective_allow_writes,
+                       allowed_write_ops=allowed_write_ops)
+    log.info('Executing on %s (%s), limit=%s offset=%s timeout=%s: %s',
+             connection_name, details['db'], limit, offset, timeout, sql,
+             extra={'connection': connection_name, 'dialect': details['db'], 'limit': limit, 'offset': offset,
+                   'timeout': timeout, 'sql_hash': _sql_hash(sql)})
+    started = time.monotonic()
+    status = 'error'
+    metrics.inc_active_query()
+    try:
+        columns, rows = RUNNERS[details['db']](details, sql, params, limit, offset, not effective_allow_writes,
+                                             timeout, get_pool())
+        status = 'success'
+    except ApiError:
+        raise
+    except ImportError as error:
+        log.exception('Missing database driver')
+        raise ApiError(f"The driver for '{details['db']}' is not installed", 500, detail=str(error)) from error
+    except Exception as error:
+        log.exception('Query on %s failed', connection_name)
+        raise ApiError('An error occurred while executing the SQL query', 500, detail=str(error)) from error
+    finally:
+        metrics.dec_active_query()
+        elapsed = time.monotonic() - started
+        metrics.observe_query(connection_name, details['db'], status, elapsed, key_name)
+        threshold = config.slow_query_threshold()
+        if threshold and elapsed >= threshold:
+            log.warning('Slow query on %s (%s): %.1fms - %s', connection_name, details['db'], elapsed * 1000, sql,
+                       extra={'connection': connection_name, 'dialect': details['db'],
+                              'duration_ms': round(elapsed * 1000, 1)})
+    has_more = len(rows) > limit
+    result_rows = rows[:limit]
+    metrics.observe_rows(connection_name, details['db'], key_name, len(result_rows))
+    return ResultSetDTO(result_rows, columns, has_more=has_more)
+
+
+def stream_sql(sql, connection_name, params=None, timeout=None, key_name='-'):
+    """Like execute_sql, but for the whole result rather than one page - and, unlike execute_sql, always
+    read-only regardless of QUERYAPIGATE_ALLOW_WRITES or the caller's own permission. A large export has no
+    business mutating data, and forcing this sidesteps a lot of incidental complexity around commit timing
+    on a connection that may stay checked out for a long time - see runners.py's "Streaming" section for
+    what that already involves per dialect without adding writes into the mix too.
+
+    Returns (columns, rows): ``columns`` is available immediately (the underlying generator is primed once
+    to get it, surfacing a connection or SQL error here just like execute_sql does), ``rows`` is a lazy
+    generator - the connection checked out (or freshly opened) for it is released only once that generator
+    is exhausted, errors, or a client disconnect closes it early (see runners._make_stream_runner).
+    """
+    details = store.get_connection(connection_name)
+    sql = validate_sql(sql, dialect=details['db'], allow_writes=False)
+    log.info('Streaming from %s (%s): %s', connection_name, details['db'], sql,
+             extra={'connection': connection_name, 'dialect': details['db'], 'sql_hash': _sql_hash(sql)})
+    status = 'error'
+    metrics.inc_active_query()
+    try:
+        stream = STREAM_RUNNERS[details['db']](details, sql, params, timeout, get_pool())
+        columns = next(stream)
+        status = 'success'
+    except ApiError:
+        raise
+    except ImportError as error:
+        log.exception('Missing database driver')
+        raise ApiError(f"The driver for '{details['db']}' is not installed", 500, detail=str(error)) from error
+    except Exception as error:
+        log.exception('Streaming query on %s failed', connection_name)
+        raise ApiError('An error occurred while executing the SQL query', 500, detail=str(error)) from error
+    finally:
+        # On success, the query stays active until _drain() below finishes consuming it - the decrement
+        # (and the row/stream-status metrics) move there with it, not here.
+        if status == 'error':
+            metrics.observe_stream(connection_name, details['db'], status, key_name)
+            metrics.dec_active_query()
+    return columns, _drain(stream, connection_name, details['db'], key_name)
+
+
+def _drain(rows, connection_name, dialect, key_name):
+    """Wraps the row generator stream_sql() returns: records the export's final status once it is fully
+    consumed (success) or fails partway through (error - client disconnects are not failures, so
+    GeneratorExit is excluded), and makes sure a mid-stream failure lands in the log. Once the response has
+    started, a failure here can no longer change its status or body shape - the client just sees the
+    connection end early - so logging clearly is the most this can do about it. Also where the query
+    started by stream_sql() actually stops being "active" (see inc_active_query() there), and where rows
+    that made it out are counted - even a partial count on failure or disconnect is data that left the
+    server, not nothing.
+
+    Also enforces QUERYAPIGATE_STREAM_MAX_ROWS (config.stream_max_rows()), if set: unlike a paged response,
+    ?stream=true has no ceiling of its own otherwise - the whole point is not buffering the result, so
+    nothing else naturally bounds how much a single export can return. Breaking out of the ``for`` loop
+    below (rather than letting it run to exhaustion) still reaches the ``else`` clause normally - a ``break``
+    only skips a ``for``'s own ``else``, not the surrounding ``try``'s - so the usual success bookkeeping
+    still runs; ``rows.close()`` is what actually releases the still-open connection early, the same
+    GeneratorExit-based cleanup a client disconnecting mid-stream already triggers (see
+    runners._make_stream_runner), just initiated from here instead of by the client closing the response.
+    """
+    limit = config.stream_max_rows()
+    truncated = False
+    count = 0
+    try:
+        for row in rows:
+            count += 1
+            yield row
+            if limit is not None and count >= limit:
+                truncated = True
+                break
+    except GeneratorExit:
+        metrics.observe_rows(connection_name, dialect, key_name, count)
+        metrics.dec_active_query()
+        raise
+    except Exception:
+        log.exception('Streaming from %s failed partway through', connection_name)
+        metrics.observe_stream(connection_name, dialect, 'error', key_name)
+        metrics.observe_rows(connection_name, dialect, key_name, count)
+        metrics.dec_active_query()
+        raise
+    else:
+        if truncated:
+            rows.close()
+            log.warning('Streaming from %s truncated at %s rows (QUERYAPIGATE_STREAM_MAX_ROWS)',
+                       connection_name, limit,
+                       extra={'connection': connection_name, 'dialect': dialect, 'row_limit': limit})
+        metrics.observe_stream(connection_name, dialect, 'truncated' if truncated else 'success', key_name)
+        metrics.observe_rows(connection_name, dialect, key_name, count)
+        metrics.dec_active_query()
+
+
+def timed(func, *args, **kwargs):
+    """Call ``func`` and return (result, elapsed milliseconds)."""
+    started = time.monotonic()
+    result = func(*args, **kwargs)
+    return result, round((time.monotonic() - started) * 1000)

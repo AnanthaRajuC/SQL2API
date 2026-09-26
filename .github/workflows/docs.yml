@@ -1,0 +1,56 @@
+name: Deploy docs
+
+# Builds the MkDocs site from LANDING.md (the site's own homepage - deliberately not README.md, which is
+# GitHub-oriented instead), documentation/ and the other root-level docs (see mkdocs.yml for how the docs/
+# folder mirrors their paths) and publishes it to GitHub Pages. First deploy needs Settings -> Pages -> Build
+# and deployment -> Source: "GitHub Actions", set once by a repository admin; after that this workflow does the rest.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - mkdocs.yml
+      - docs/**
+      - LANDING.md
+      - documentation/**
+      - CONTRIBUTING.md
+      - SECURITY.md
+      - CODE_OF_CONDUCT.md
+      - CHANGELOG.md
+      - BACKLOG.md
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time; a newer push should win, not queue behind an older one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "mkdocs-material>=9,<10"
+      - run: mkdocs build --strict
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

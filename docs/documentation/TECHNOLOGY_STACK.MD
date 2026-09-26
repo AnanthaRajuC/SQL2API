@@ -1,0 +1,1 @@
+--8<-- "documentation/TECHNOLOGY_STACK.MD"

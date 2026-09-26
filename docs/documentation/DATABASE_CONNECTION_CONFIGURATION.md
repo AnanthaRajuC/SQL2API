@@ -1,0 +1,1 @@
+--8<-- "documentation/DATABASE_CONNECTION_CONFIGURATION.md"

@@ -1,0 +1,4 @@
+# Every pull request requests a review from the owner below, unless a more specific
+# pattern further down this file matches first (rules are matched last-one-wins,
+# same as .gitignore). See https://docs.github.com/articles/about-code-owners
+* @AnanthaRajuC

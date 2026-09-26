@@ -1,0 +1,280 @@
+"""Runtime configuration, read from environment variables at call time."""
+import os
+import re
+from pathlib import Path
+
+SUPPORTED_DB_TYPES = ('mysql', 'postgres', 'clickhouse', 'sqlite', 'h2', 'jdbc', 'duckdb')
+PASSWORD_MASK = '********'
+CONNECT_TIMEOUT = 10  # seconds
+HISTORY_LIMIT = 50  # executions remembered per saved-query version
+AUDIT_LOG_LIMIT = 500  # administrative-action entries remembered across the whole server
+DEFAULT_QUERY_TIMEOUT = 30.0  # seconds
+DEFAULT_POOL_SIZE = 5  # idle connections kept per distinct connection
+DEFAULT_POOL_IDLE_TIMEOUT = 300.0  # seconds
+DEFAULT_SLOW_QUERY_THRESHOLD = 1.0  # seconds
+
+# Ships with the package; override with QUERYAPIGATE_H2_JAR to use a different H2 version.
+BUNDLED_H2_JAR = Path(__file__).parent / 'lib' / 'h2-2.2.224.jar'
+
+# Shown by `queryapigate init`. Every entry starts inactive so nothing connects until you opt in.
+EXAMPLE_CONNECTIONS = {
+    'connections': {
+        'example-sqlite': {'db': 'sqlite', 'database': 'example.db', 'active': False},
+        'example-duckdb': {'db': 'duckdb', 'database': 'example.duckdb', 'active': False},
+        'example-postgres': {'db': 'postgres', 'host': 'localhost', 'port': 5432, 'database': 'postgres',
+                             'user': 'postgres', 'password': '${POSTGRES_PASSWORD}', 'active': False},
+        'example-mysql': {'db': 'mysql', 'host': 'localhost', 'port': 3306, 'database': 'mydb',
+                          'user': 'root', 'password': '${MYSQL_PASSWORD}', 'active': False},
+        'example-clickhouse': {'db': 'clickhouse', 'host': 'localhost', 'port': 9000, 'database': 'default',
+                               'user': 'default', 'password': '', 'active': False},
+        'example-h2': {'db': 'h2', 'host': 'localhost', 'database': 'test', 'user': 'SA', 'password': '',
+                       'active': False},
+    }
+}
+
+
+def env_flag(name):
+    return os.environ.get(name, '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+_FLAG_WORDS = ('', '0', '1', 'true', 'false', 'yes', 'no', 'on', 'off')
+
+
+def load_examples():
+    """QUERYAPIGATE_LOAD_EXAMPLES: load the example APIs at startup (idempotent) - the container-friendly way to get
+    what ``queryapigate examples load`` does. Unset or a no-word means leave things as they are."""
+    return env_flag('QUERYAPIGATE_LOAD_EXAMPLES')
+
+
+def home():
+    """Folder holding db_connections.json and saved_sql/ (QUERYAPIGATE_HOME, default: current directory)."""
+    return Path(os.environ.get('QUERYAPIGATE_HOME') or os.getcwd()).resolve()
+
+
+def connections_file():
+    return home() / 'db_connections.json'
+
+
+def api_keys_file():
+    return home() / 'api_keys.json'
+
+
+def roles_file():
+    return home() / 'roles.json'
+
+
+def audit_log_file():
+    return home() / 'audit_log.json'
+
+
+def audit_log_limit():
+    """Administrative-action entries remembered in audit_log.json (QUERYAPIGATE_AUDIT_LOG_LIMIT), default
+    AUDIT_LOG_LIMIT (500). Always a positive count, never "unbounded" like stream_max_rows() can be: unlike
+    a streaming export, audit_log.json is read and rewritten in full on every single audit event (see
+    store.record_audit()), so letting it grow without bound would turn every administrative action into an
+    ever-slower disk read/write. Raise this for longer retention, or set QUERYAPIGATE_AUDIT_LOG_EXPORT_FILE for
+    retention this cap can never roll off. Validated at startup (check_settings()), the same "fail loudly on
+    a typo" treatment stream_max_rows() gets."""
+    raw = os.environ.get('QUERYAPIGATE_AUDIT_LOG_LIMIT', '').strip()
+    return int(raw) if raw else AUDIT_LOG_LIMIT
+
+
+def audit_log_export_file():
+    """Optional path (QUERYAPIGATE_AUDIT_LOG_EXPORT_FILE) to also append every audit entry to, one JSON object per
+    line, appended only - never capped or rewritten like audit_log.json itself, so retention here doesn't
+    depend on audit_log_limit() being sized generously enough. None when unset (today's behaviour,
+    unchanged): nothing exported beyond audit_log.json's own rolling window."""
+    raw = os.environ.get('QUERYAPIGATE_AUDIT_LOG_EXPORT_FILE', '').strip()
+    return Path(raw) if raw else None
+
+
+def saved_sql_dir():
+    return home() / 'saved_sql'
+
+
+def h2_jar():
+    return os.environ.get('QUERYAPIGATE_H2_JAR') or str(BUNDLED_H2_JAR)
+
+
+def allow_writes():
+    return env_flag('QUERYAPIGATE_ALLOW_WRITES')
+
+
+def api_key():
+    return os.environ.get('QUERYAPIGATE_API_KEY') or None
+
+
+def query_timeout():
+    """Server-wide statement time limit in seconds (QUERYAPIGATE_QUERY_TIMEOUT); None when disabled (set to 0)."""
+    try:
+        value = float(os.environ.get('QUERYAPIGATE_QUERY_TIMEOUT', DEFAULT_QUERY_TIMEOUT))
+    except ValueError:
+        return DEFAULT_QUERY_TIMEOUT
+    if value == 0:
+        return None
+    return value if value > 0 else DEFAULT_QUERY_TIMEOUT
+
+
+def effective_timeout(requested=None):
+    """The limit to enforce: a request may ask for less time than the server allows, never more."""
+    limit = query_timeout()
+    if requested is None:
+        return limit
+    return requested if limit is None else min(requested, limit)
+
+
+def pool_size():
+    """Idle connections kept per distinct connection (QUERYAPIGATE_POOL_SIZE); 0 disables pooling."""
+    try:
+        return max(0, int(os.environ.get('QUERYAPIGATE_POOL_SIZE', DEFAULT_POOL_SIZE)))
+    except ValueError:
+        return DEFAULT_POOL_SIZE
+
+
+def pool_idle_timeout():
+    """Seconds an idle pooled connection is kept before it is closed (QUERYAPIGATE_POOL_IDLE_TIMEOUT)."""
+    try:
+        value = float(os.environ.get('QUERYAPIGATE_POOL_IDLE_TIMEOUT', DEFAULT_POOL_IDLE_TIMEOUT))
+    except ValueError:
+        return DEFAULT_POOL_IDLE_TIMEOUT
+    return value if value > 0 else DEFAULT_POOL_IDLE_TIMEOUT
+
+
+def cors_origins():
+    """Origins allowed to call the API from a browser (QUERYAPIGATE_CORS_ORIGINS): None (off), '*' or a frozenset.
+
+    Entries are compared case-insensitively and without a trailing slash, e.g. https://app.example.com.
+    """
+    raw = os.environ.get('QUERYAPIGATE_CORS_ORIGINS', '').strip()
+    if not raw:
+        return None
+    origins = [item.strip().rstrip('/').lower() for item in raw.split(',') if item.strip()]
+    if '*' in origins:
+        return '*'
+    return frozenset(origins) or None
+
+
+_RATE_PERIODS = {'second': 1, 'minute': 60, 'hour': 3600, 'day': 86400}
+_RATE_RE = re.compile(r'^\s*(\d+)\s*/\s*(second|minute|hour|day)s?\s*$', re.I)
+
+
+def parse_rate_limit(text, label='QUERYAPIGATE_RATE_LIMIT'):
+    """Parse '60/minute' (also second, hour, day) into (requests, seconds); raises ValueError when malformed.
+    ``label`` names the setting in the error message - the default fits this function's own env var, but a
+    caller validating the same grammar for something else (e.g. apikeys.py's per-key rate_limit) should
+    pass its own name so the message doesn't misleadingly point at QUERYAPIGATE_RATE_LIMIT."""
+    match = _RATE_RE.match(text or '')
+    if not match or int(match.group(1)) < 1:
+        raise ValueError(f"{label} must look like '60/minute' (a positive count, then second, minute, "
+                         f"hour or day), not {text!r}")
+    return int(match.group(1)), _RATE_PERIODS[match.group(2).lower()]
+
+
+_RATE_PERIOD_NAMES = {seconds: name for name, seconds in _RATE_PERIODS.items()}
+
+
+def format_rate_limit(rate_limit):
+    """The inverse of parse_rate_limit(): (60, 60) -> '60/minute'. None in, None out - for rendering an
+    already-resolved (requests, seconds) pair (e.g. a Permission's own rate_limit) back into the same
+    human-readable form it was originally configured in."""
+    if rate_limit is None:
+        return None
+    count, seconds = rate_limit
+    return f'{count}/{_RATE_PERIOD_NAMES.get(seconds, str(seconds) + "s")}'
+
+
+def rate_limit():
+    """(requests, seconds) allowed per client (QUERYAPIGATE_RATE_LIMIT), or None when limiting is off."""
+    raw = os.environ.get('QUERYAPIGATE_RATE_LIMIT', '').strip()
+    if not raw:
+        return None
+    try:
+        return parse_rate_limit(raw)
+    except ValueError:
+        return None  # create_app() rejects a malformed value at startup; never limit by accident afterwards
+
+
+def proxy_hops():
+    """Reverse proxies in front of the app whose X-Forwarded-* headers can be trusted (QUERYAPIGATE_TRUST_PROXY)."""
+    try:
+        return max(0, int(os.environ.get('QUERYAPIGATE_TRUST_PROXY', 0)))
+    except ValueError:
+        return 0
+
+
+def check_settings():
+    """Raise ValueError for a malformed setting, so a typo fails at startup instead of silently switching off a
+    protection."""
+    # This project was named SQL2API before it was QueryAPIGate, and its settings were SQL2API_*. They are
+    # deliberately not read any more - but silently ignoring a leftover SQL2API_API_KEY would start the server
+    # with no admin key configured, which means open access. So a leftover old name is a startup error.
+    legacy = sorted(name for name in os.environ if name.startswith('SQL2API_'))
+    if legacy:
+        renamed = ', '.join(f"{name} -> QUERYAPIGATE_{name[len('SQL2API_'):]}" for name in legacy)
+        raise ValueError(f'these settings use the old SQL2API_ prefix, which is no longer read: {renamed}. '
+                         'Rename each one; ignoring them silently could leave the server without an API key')
+    raw = os.environ.get('QUERYAPIGATE_LOAD_EXAMPLES', '').strip().lower()
+    if raw not in _FLAG_WORDS:
+        raise ValueError(f"QUERYAPIGATE_LOAD_EXAMPLES must be yes or no (or 1/0, true/false, on/off), not '{raw}'")
+    raw = os.environ.get('QUERYAPIGATE_RATE_LIMIT', '').strip()
+    if raw:
+        parse_rate_limit(raw)
+    raw = os.environ.get('QUERYAPIGATE_STREAM_MAX_ROWS', '').strip()
+    if raw and (not raw.isdigit() or int(raw) < 1):
+        raise ValueError('QUERYAPIGATE_STREAM_MAX_ROWS must be a positive integer')
+    raw = os.environ.get('QUERYAPIGATE_AUDIT_LOG_LIMIT', '').strip()
+    if raw and (not raw.isdigit() or int(raw) < 1):
+        raise ValueError('QUERYAPIGATE_AUDIT_LOG_LIMIT must be a positive integer')
+    raw = os.environ.get('QUERYAPIGATE_SECRET_KEY', '').strip()
+    if raw:
+        try:
+            from cryptography.fernet import Fernet
+        except ImportError:
+            raise ValueError('QUERYAPIGATE_SECRET_KEY is set but the "cryptography" package is not installed - '
+                             'run `pip install "queryapigate[encryption]"`') from None
+        try:
+            Fernet(raw.encode('utf-8'))
+        except (ValueError, TypeError):
+            raise ValueError('QUERYAPIGATE_SECRET_KEY must be a valid Fernet key - 32 url-safe base64-encoded '
+                             'bytes, e.g. from `python -c "from cryptography.fernet import Fernet; '
+                             'print(Fernet.generate_key().decode())"`') from None
+
+
+def secret_key():
+    """The server-side key used to encrypt connection passwords at rest (QUERYAPIGATE_SECRET_KEY), or None when
+    unset - encryption at rest is opt-in; without it, a connection's password is stored exactly as given,
+    today's unchanged behaviour. Validated as a real Fernet key at startup by check_settings(), not here."""
+    return os.environ.get('QUERYAPIGATE_SECRET_KEY') or None
+
+
+def max_page_size():
+    try:
+        return max(1, int(os.environ.get('QUERYAPIGATE_MAX_PAGE_SIZE', 1000)))
+    except ValueError:
+        return 1000
+
+
+def stream_max_rows():
+    """Row cap for a streaming (?stream=true) export (QUERYAPIGATE_STREAM_MAX_ROWS), or None when unbounded -
+    today's original behaviour, unchanged unless explicitly opted into. Validated at startup
+    (check_settings()) rather than silently falling back like max_page_size() does: this is a safety cap an
+    admin is deliberately turning on, so a typo should fail loudly, not silently leave it unbounded."""
+    raw = os.environ.get('QUERYAPIGATE_STREAM_MAX_ROWS', '').strip()
+    return int(raw) if raw else None
+
+
+def json_logs():
+    """Emit structured (one JSON object per line) logs instead of plain text (QUERYAPIGATE_JSON_LOGS)."""
+    return env_flag('QUERYAPIGATE_JSON_LOGS')
+
+
+def slow_query_threshold():
+    """Seconds a query may take before it is logged as a warning (QUERYAPIGATE_SLOW_QUERY_THRESHOLD, default 1);
+    None when 0 disables it."""
+    try:
+        value = float(os.environ.get('QUERYAPIGATE_SLOW_QUERY_THRESHOLD', DEFAULT_SLOW_QUERY_THRESHOLD))
+    except ValueError:
+        return DEFAULT_SLOW_QUERY_THRESHOLD
+    if value == 0:
+        return None
+    return value if value > 0 else DEFAULT_SLOW_QUERY_THRESHOLD

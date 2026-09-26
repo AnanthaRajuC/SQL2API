@@ -1,0 +1,26 @@
+name: Release
+
+# Publishes to PyPI when a version tag (v0.1.0, ...) is pushed.
+# One-time setup: add this repository as a "trusted publisher" on PyPI (environment name: pypi).
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # the check below needs history to see whether the tag is on main
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Check the tag before publishing
+        run: python .github/scripts/check_release.py "$GITHUB_REF_NAME"
+      - run: pip install build
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1

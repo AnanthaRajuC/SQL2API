@@ -1,0 +1,61 @@
+site_name: QueryAPIGate
+site_description: Turn SQL into a REST API - run queries against MySQL, PostgreSQL, ClickHouse, SQLite or H2 over HTTP.
+site_url: https://AnanthaRajuC.github.io/QueryAPIGate/
+repo_url: https://github.com/AnanthaRajuC/QueryAPIGate
+repo_name: AnanthaRajuC/QueryAPIGate
+edit_uri: edit/main/
+
+# The pages below are one-line files (--8<-- "path/to/the/real/file.md") that pull the actual content in at
+# build time via pymdownx.snippets, so there is exactly one place to edit each document (this repo's own
+# root-level files and documentation/ folder, read normally on GitHub) - docs/ only mirrors their paths so
+# the relative links between them keep working unchanged on the built site too. The one exception is
+# docs/index.md, which pulls in LANDING.md rather than README.md - the site's homepage is deliberately a
+# tighter, docs-first page, distinct from the GitHub-oriented README (screenshots, badges, full feature
+# list); LANDING.md links out to the README on GitHub for that fuller picture.
+docs_dir: docs
+
+nav:
+  - Home: index.md
+  - Installation: documentation/INSTALLATION_AND_SETUP.md
+  - Example APIs: documentation/EXAMPLES.md
+  - API reference: documentation/API.md
+  - Database connections: documentation/DATABASE_CONNECTION_CONFIGURATION.md
+  - Query metadata: documentation/QUERY_METADATA_MANAGEMENT.md
+  - Technology stack: documentation/TECHNOLOGY_STACK.MD
+  - Security: SECURITY.md
+  - Contributing: CONTRIBUTING.md
+  - Code of conduct: CODE_OF_CONDUCT.md
+  - Changelog: CHANGELOG.md
+  - Roadmap: BACKLOG.md
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle: {icon: material/brightness-7, name: Switch to dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle: {icon: material/brightness-4, name: Switch to light mode}
+  features:
+    - navigation.tabs
+    - navigation.top
+    - navigation.instant
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight

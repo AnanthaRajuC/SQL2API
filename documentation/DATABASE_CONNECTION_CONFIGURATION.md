@@ -1,0 +1,197 @@
+# Database connection configuration
+
+Connections live in `db_connections.json` inside the data folder (`QUERYAPIGATE_HOME`, default: the current directory).
+Create a starter file with `queryapigate init` (inactive templates for every supported database).
+The file is re-read on every request, so edits take effect without a restart, and it can also be managed through the
+[`/connections` API](API.md#connections).
+
+## File structure
+
+~~~json
+{
+    "connections": {
+        "reporting": {
+            "db": "postgres",
+            "host": "db.internal",
+            "port": 5432,
+            "database": "reports",
+            "user": "readonly",
+            "password": "${REPORTING_PASSWORD}",
+            "active": true
+        },
+        "local-file": {"db": "sqlite", "database": "my-database.db", "active": true}
+    }
+}
+~~~
+
+## Supported types
+
+| `db` | Driver | Notes |
+|------|--------|-------|
+| `mysql` | `mysql-connector-python` | Sessions are opened `READ ONLY` unless writes are enabled |
+| `postgres` | `psycopg2` | Sessions are opened read-only unless writes are enabled |
+| `clickhouse` | `clickhouse-driver` (native protocol, port 9000) | `readonly=1` unless writes are enabled |
+| `sqlite` | `sqlite3` | Opened with `mode=ro` unless writes are enabled |
+| `h2` | `JayDeBeApi` + bundled JDBC jar | Connects to a running H2 TCP server: `jdbc:h2:tcp://<host>[:port]/~/<database>` |
+| `jdbc` | `JayDeBeApi` + your own JDBC jar | Any other JDBC-compliant database (Oracle, SQL Server, DB2, Snowflake, ...) - see [Generic JDBC connections](#generic-jdbc-connections) |
+| `duckdb` | `duckdb` | An embedded analytical database that can also query CSV/JSON/Parquet files directly - see [DuckDB connections](#duckdb-connections) |
+
+The SQL guard (single-statement / read-only check, see [API.md](API.md)) reads string literals using the quoting
+rules the connection's `db` type actually uses: `mysql` and `clickhouse` honour a backslash escape inside quoted
+strings by default, the others do not, and using the wrong rule for a value can misjudge where a statement ends.
+
+## Query time limit
+
+`QUERYAPIGATE_QUERY_TIMEOUT` (default 30 seconds) is enforced by each database itself, so the statement is genuinely
+cancelled and its resources released rather than merely abandoned:
+
+| `db` | Mechanism | Notes |
+|------|-----------|-------|
+| `mysql` | `max_execution_time` (MariaDB: `max_statement_time`) | Applies to `SELECT`. MySQL cuts `SLEEP()` and `BENCHMARK()` short but returns normally instead of raising an error. |
+| `postgres` | `statement_timeout` | |
+| `clickhouse` | `max_execution_time` | Whole seconds, checked as data blocks are processed, so cancellation can lag slightly. |
+| `sqlite` | progress handler | Checked every 10 000 VM instructions. |
+| `h2` | `SET QUERY_TIMEOUT` | |
+| `jdbc` | *not enforced* | No portable way to cancel a statement across arbitrary JDBC drivers - see [Generic JDBC connections](#generic-jdbc-connections) |
+| `duckdb` | `Connection.interrupt()` on a background timer | |
+
+## Connection pooling
+
+MySQL, PostgreSQL, ClickHouse, H2, generic `jdbc` and `duckdb` connections are kept open and reused between requests
+(SQLite is a local file and is opened per request). Tune it with `QUERYAPIGATE_POOL_SIZE` (idle connections kept per
+distinct connection setting, default 5, `0` disables pooling) and `QUERYAPIGATE_POOL_IDLE_TIMEOUT` (seconds, default 300).
+
+- **Clean hand-over.** A connection's transaction is ended before it is reused, so a request never sees a stale
+  snapshot, and query limits are applied per request (or per transaction) so they never leak to the next user.
+- **Errors.** A connection used by a failed or timed-out request is closed rather than reused.
+- **Health checks.** A connection that sat idle for more than a few seconds is checked before reuse; a dead one is
+  replaced transparently.
+- **Changes take effect.** `PATCH`/`DELETE /connections` close all idle pooled connections immediately. If you edit
+  `db_connections.json` by hand, old connections are dropped as they reach the idle timeout.
+- **Sizing.** The pool bounds *idle* connections, not concurrent ones. Each server process has its own pool, so the
+  most idle connections your database sees is roughly `QUERYAPIGATE_POOL_SIZE` x distinct connections x worker processes;
+  keep that below the database's `max_connections`.
+- **Streaming exports hold their connection for the whole download, not just the query.** `?stream=true` (see
+  [Streaming exports](API.md#streaming-exports)) checks a connection out of the pool exactly like any other
+  request, but does not release it back until the client has received the *entire* result - which, for a slow
+  client or a very large export, can be a lot longer than a normal request. A few large concurrent exports can
+  make a small `QUERYAPIGATE_POOL_SIZE` feel undersized for everything else running at the same time; size accordingly,
+  or set `QUERYAPIGATE_POOL_SIZE=0` if that trade-off is not acceptable for your deployment (every request, including
+  streamed ones, then opens and closes its own connection).
+- **Streaming's own memory footprint varies by dialect.** MySQL (an unbuffered cursor), PostgreSQL (a named,
+  server-side cursor) and ClickHouse (`execute_iter`) stream from the database itself without the driver
+  buffering the whole result client-side first - verified against a real server: streaming 1 million rows kept
+  this project's own process memory flat throughout, against several hundred MB to fetch the same result the
+  ordinary way. SQLite, H2, the generic `jdbc` type and DuckDB still bound *this project's own* memory to one
+  batch (1000 rows) at a time regardless of result size, but the underlying engine or driver may still hold more
+  than that internally - H2/`jdbc` because jaydebeapi exposes no way to set the JDBC `ResultSet`'s fetch size,
+  DuckDB because its engine computes the whole result during `execute()` before the first row is even fetched
+  (see the `_DuckDB`/`_H2` docstrings in `runners.py` for what was actually measured, not assumed).
+
+## Properties
+
+| Property | Required | Description |
+|----------|----------|-------------|
+| `db` | yes | One of the types above |
+| `active` | yes | Only active connections can be used (otherwise 403) |
+| `database` | yes | Database name, or the file path for SQLite/DuckDB (relative paths resolve against the data folder) |
+| `host` | network databases | Server host |
+| `port` | no | Overrides the driver's default port |
+| `user`, `password` | usually | Credentials |
+| `jar`, `driver_class`, `jdbc_url` | `db: "jdbc"` only | See [Generic JDBC connections](#generic-jdbc-connections) |
+
+## Generic JDBC connections
+
+`db: "jdbc"` reaches any database with a JDBC driver - Oracle, SQL Server, DB2, Snowflake and others not covered by
+a dedicated driver above - by generalising the same embedded-JVM approach `h2` already uses. It needs three fields
+instead of `host`/`port`/`database`, since JDBC URL formats vary too much between vendors to build one generically:
+
+~~~json
+{
+    "oracle-reporting": {
+        "db": "jdbc",
+        "jar": "/opt/jdbc/ojdbc11.jar",
+        "driver_class": "oracle.jdbc.OracleDriver",
+        "jdbc_url": "jdbc:oracle:thin:@//db.internal:1521/ORCLPDB1",
+        "user": "readonly",
+        "password": "${ORACLE_PASSWORD}",
+        "active": true
+    }
+}
+~~~
+
+- `jar` - path to the vendor's JDBC driver `.jar` (not bundled - only H2's is). Needs a JVM, so either the `-h2`
+  Docker image variant or your own JVM installation, same as `h2`.
+- `driver_class` - the driver's fully-qualified Java class name (from its documentation, e.g.
+  `oracle.jdbc.OracleDriver`, `com.microsoft.sqlserver.jdbc.SQLServerDriver`, `com.ibm.db2.jcc.DB2Driver`,
+  `net.snowflake.client.jdbc.SnowflakeDriver`).
+- `jdbc_url` - the complete JDBC connection URL, exactly as that vendor's driver expects it.
+
+Three consequences of reusing one embedded JVM, not specific to any one connection:
+
+- **The JVM's classpath is fixed the moment it starts** (from whichever `h2` or `jdbc` connection is used first),
+  and cannot be changed afterwards. Every jar from every `jdbc` connection configured *at that moment* is included
+  automatically, so the common case - configure your connections, then start using them - works with no extra
+  steps. Adding a **new** `jdbc` connection whose jar isn't already on the classpath needs the server **restarted**
+  before that connection can be used.
+- **No query time limit is enforced** (see the table above) - `QUERYAPIGATE_QUERY_TIMEOUT` does not cancel a slow query
+  on a `jdbc` connection.
+- **Schema introspection is not available**: `GET /connections/<name>/schema` answers 400 for a `jdbc` connection -
+  vendor system-catalogue queries differ too much to generalise safely yet.
+
+Like `h2`, a `jdbc` connection's read-only mode rests on the SQL guard alone (`Connection.setReadOnly()` is
+advisory in the JDBC specification, not something every driver is required to enforce).
+
+## DuckDB connections
+
+`db: "duckdb"` is an embedded analytical database - its own storage, its own persistent `.db` file, no server
+process to run - that also happens to read flat files directly. One connection type, two uses:
+
+~~~json
+{
+    "analytics": {"db": "duckdb", "database": "analytics.duckdb", "active": true}
+}
+~~~
+
+**As a general embedded database**, it behaves like `sqlite`: point `database` at a file (created on first write, an
+existing empty or populated file otherwise), then `CREATE TABLE`/`INSERT`/`SELECT` against it as usual. Its SQL
+dialect is close to PostgreSQL, so it uses the same quote-doubling string-literal rules as `postgres`/`sqlite`/`h2`
+(no backslash escaping).
+
+**For flat files**, no new connection fields are needed - reference the file straight from a saved query's own SQL
+using DuckDB's own table functions:
+
+~~~sql
+SELECT * FROM read_csv(:path) WHERE status = :status
+SELECT customer_id, sum(amount) FROM read_parquet('/data/sales/*.parquet') GROUP BY customer_id
+~~~
+
+Column types are inferred automatically; no `CREATE TABLE` or import step first. This works against any active
+`duckdb` connection, including a bare `example.duckdb` file that has no tables of its own yet.
+
+A relative path (like `'orders.csv'` above) resolves against the **server process's own working directory** - not
+`QUERYAPIGATE_HOME`, unlike the connection's own `database` field. This is easy to get bitten by once (a query that
+works when you run `queryapigate serve` from one directory 404s from another), so an **absolute path** is the safer
+choice - or, as in `read_csv(:path)` above, bind it as a parameter instead of writing it into the SQL at all, which
+also sidesteps having to think about how a path with a quote in it would need escaping.
+
+Two things carried over from `h2`/`jdbc`, both for the same underlying reason (DuckDB refuses to open a second
+connection to a file with a different read-only setting than a connection already open on it, which pooling
+read-only and read-write connections separately would trip constantly):
+
+- Every pooled connection is opened read-write regardless of the caller's read-only mode - **the read-only
+  guarantee rests on the SQL guard alone**, same as `h2`/`jdbc`.
+- Unlike `h2`/`jdbc`, the query time limit **is** enforced (`Connection.interrupt()`, see the table above) - this
+  is a DuckDB Python client capability the JDBC-based drivers don't have access to.
+
+## Keeping secrets out of the file
+
+Any string value may contain `${VAR}` references, replaced with the environment variable's value when the connection is
+used (a missing variable is reported as an error naming it). `GET /connections` masks plain-text passwords as
+`********` and shows `${VAR}` references as written.
+
+## Best practice
+
+- Use a database account with only the privileges the API needs. The read-only guard is defence in depth.
+- Keep `db_connections.json` out of version control (the repository's `.gitignore` already does).
+- Use `"active": false` to disable a connection without deleting it.

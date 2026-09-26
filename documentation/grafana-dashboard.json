@@ -1,0 +1,148 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "The Prometheus datasource scraping this QueryAPIGate server's /metrics endpoint.",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "9.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" }
+  ],
+  "title": "QueryAPIGate",
+  "description": "Request/query traffic, latency, errors, pool occupancy and rate limiting for one QueryAPIGate server, built from its own /metrics endpoint (see documentation/API.md#observability). Metrics are in-process and per-server-process - each QueryAPIGate instance needs its own Prometheus scrape target; this dashboard does not aggregate across instances.",
+  "tags": ["queryapigate"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Active queries",
+      "description": "Queries currently executing right now (paged or mid-stream). A streaming export stays counted for as long as the client keeps reading.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 5 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" },
+      "targets": [{ "refId": "A", "expr": "queryapigate_active_queries", "legendFormat": "active" }]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Pool idle connections",
+      "description": "Idle pooled database connections currently held, across all connections combined.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 5 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" },
+      "targets": [{ "refId": "A", "expr": "queryapigate_pool_idle_connections", "legendFormat": "idle" }]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Rate limit rejections (1h)",
+      "description": "Requests rejected by the rate limiter (server-wide or per-key) in the last hour.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 5 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "none", "colorMode": "value" },
+      "targets": [{ "refId": "A", "expr": "increase(queryapigate_rate_limit_rejections_total[1h])", "legendFormat": "rejections" }]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Error rate (5m)",
+      "description": "Share of requests answered with a 4xx or 5xx status over the last 5 minutes.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 5 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "color": { "mode": "thresholds" },
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 5 }] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "graphMode": "area", "colorMode": "value" },
+      "targets": [{ "refId": "A", "expr": "100 * sum(rate(queryapigate_requests_total{status=~\"4..|5..\"}[5m])) / sum(rate(queryapigate_requests_total[5m]))", "legendFormat": "error rate" }]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Request rate by status",
+      "description": "HTTP requests per second, split by status code.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 0, "y": 5, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [{ "refId": "A", "expr": "sum(rate(queryapigate_requests_total[5m])) by (status)", "legendFormat": "{{status}}" }]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Request latency (p50 / p95 / p99)",
+      "description": "End-to-end HTTP request latency, across all endpoints.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 12, "y": 5, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum(rate(queryapigate_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(queryapigate_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum(rate(queryapigate_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "SQL query rate by connection",
+      "description": "SQL queries per second, split by connection and success/error status.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 0, "y": 13, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "fillOpacity": 10, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [{ "refId": "A", "expr": "sum(rate(queryapigate_queries_total[5m])) by (connection, status)", "legendFormat": "{{connection}} ({{status}})" }]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "SQL query latency p95 by connection",
+      "description": "95th-percentile query execution time (excludes response serialization), split by connection.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 12, "y": 13, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(queryapigate_query_duration_seconds_bucket[5m])) by (le, connection))", "legendFormat": "{{connection}}" }]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Rows returned by connection",
+      "description": "Rows actually returned per second - the trimmed page for a paged query, or however many made it out of a streaming export before it finished or failed.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 0, "y": 21, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [{ "refId": "A", "expr": "sum(rate(queryapigate_rows_returned_total[5m])) by (connection)", "legendFormat": "{{connection}}" }]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Response serialization latency p95 by format",
+      "description": "How long building the response body (JSON/CSV/TSV/XML/YAML/XLSX encoding) took, for paged responses only - streaming formats row by row, so there's no equivalent span there.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "x": 12, "y": 21, "w": 12, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 5 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum(rate(queryapigate_serialization_duration_seconds_bucket[5m])) by (le, format))", "legendFormat": "{{format}}" }]
+    }
+  ]
+}

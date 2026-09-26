@@ -1,0 +1,1 @@
+--8<-- "documentation/QUERY_METADATA_MANAGEMENT.md"
